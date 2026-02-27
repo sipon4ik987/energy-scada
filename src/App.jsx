@@ -17,6 +17,30 @@ const mkKR = (id, n, secs, x, y) => ({
   sections: secs.map((s, i) => ({ id: `${id}-s${i + 1}`, name: s, closed: true })),
 });
 const mkLR = (id, n, x, y) => ({ id, name: n, closed: true, meter: "", x, y });
+const TP2_W = 190, TP2_H = 80;
+const mk2BKTP = (id, n, pw1, pw2, x, y) => ({
+  id, name: n, type: "2bktp", power1: pw1, power2: pw2, meterHv1: "", meterHv2: "", cable10: "", x, y,
+  sw: { in1_1: true, in2_1: true, tr_1: true, out1_1: true, in1_2: true, in2_2: true, tr_2: true, out1_2: true },
+  sv10: false, sv04: false,
+});
+
+const STORAGE_KEY = "energy-scada-state";
+const loadState = () => {
+  try {
+    const s = localStorage.getItem(STORAGE_KEY);
+    if (!s) return null;
+    const parsed = JSON.parse(s);
+    console.log("[SCADA] Loaded state from localStorage, tps:", parsed.tps?.length, "kruns:", parsed.kruns?.length, "lrs:", parsed.lrs?.length, "cells:", parsed.cells?.length, "links:", parsed.links?.length);
+    return parsed;
+  } catch (e) { console.error("[SCADA] Failed to load state:", e); return null; }
+};
+const saveState = (d) => {
+  try {
+    const json = JSON.stringify(d);
+    localStorage.setItem(STORAGE_KEY, json);
+    console.log("[SCADA] Saved state, size:", json.length, "bytes");
+  } catch (e) { console.error("[SCADA] Failed to save state:", e); }
+};
 
 const INIT = {
   buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" }, { id: "bus-rp", name: "РП-25" }],
@@ -119,6 +143,33 @@ function pKey(p) {
   if (p.block === "tp") return `tp-${p.port}:${p.id}`;
   return "?";
 }
+function tryEnter(portRef, d, queue) {
+  const p = portRef;
+  const pk = pKey(p);
+  if (p.block === "lr") { const lr = d.lrs.find(l => l.id === p.id); if (lr?.closed) queue.push(pk); }
+  else if (p.block === "krun") {
+    for (const kr of d.kruns) {
+      const sec = kr.sections.find(s => s.id === `${p.id}-${p.port}`);
+      if (sec?.closed) { queue.push(pk); kr.sections.forEach(s2 => { if (s2.id !== sec.id && s2.closed) queue.push(`ks:${s2.id}`); }); }
+    }
+  }
+  else if (p.block === "tp") {
+    const tp = d.tps.find(t => t.id === p.id);
+    if (tp?.type === "2bktp") {
+      const port = p.port;
+      if (!tp.sw[port]) return;
+      queue.push(pk);
+      const side = port.endsWith("_1") ? "_1" : "_2";
+      const otherSide = side === "_1" ? "_2" : "_1";
+      ["in1", "in2", "out1"].forEach(b => { const pp = b + side; if (pp !== port && tp.sw[pp]) queue.push(`tp-${pp}:${tp.id}`); });
+      if (tp.sv10) ["in1", "in2", "out1"].forEach(b => { const pp = b + otherSide; if (tp.sw[pp]) queue.push(`tp-${pp}:${tp.id}`); });
+    } else {
+      if (p.port === "in1" && tp?.sw.in1) { queue.push(pk); if (tp.sw.in2) queue.push(`tp-in2:${tp.id}`); if (tp.sw.out1) queue.push(`tp-out1:${tp.id}`); }
+      else if (p.port === "in2" && tp?.sw.in2) { queue.push(pk); if (tp.sw.in1) queue.push(`tp-in1:${tp.id}`); if (tp.sw.out1) queue.push(`tp-out1:${tp.id}`); }
+      else if (p.port === "out1" && tp?.sw.out1) { queue.push(pk); if (tp.sw.in1) queue.push(`tp-in1:${tp.id}`); if (tp.sw.in2) queue.push(`tp-in2:${tp.id}`); }
+    }
+  } else queue.push(pk);
+}
 function isEnergized(pk, d) {
   const visited = new Set(); const queue = [];
   d.cells.forEach(c => { if (c.closed && c.type !== "reserve" && busOn(c.busId, d)) queue.push(`cell:${c.id}`); });
@@ -127,26 +178,31 @@ function isEnergized(pk, d) {
     const cur = queue.shift(); if (visited.has(cur)) continue; visited.add(cur);
     if (cur === pk) return true;
     for (const link of d.links) {
-      const fk = pKey(link.from); if (fk !== cur) continue;
-      const tk = pKey(link.to); if (visited.has(tk)) continue;
-      const to = link.to;
-      if (to.block === "lr") { const lr = d.lrs.find(l => l.id === to.id); if (lr?.closed) queue.push(tk); }
-      else if (to.block === "krun") {
-        for (const kr of d.kruns) { const sec = kr.sections.find(s => s.id === `${to.id}-${to.port}`);
-          if (sec?.closed) { queue.push(tk); kr.sections.forEach(s2 => { if (s2.id !== sec.id && s2.closed) queue.push(`ks:${s2.id}`); }); } }
-      }
-      else if (to.block === "tp") {
-        const tp = d.tps.find(t => t.id === to.id);
-        if (to.port === "in1" && tp?.sw.in1) { queue.push(tk); if (tp.sw.in2) queue.push(`tp-in2:${tp.id}`); if (tp.sw.out1) queue.push(`tp-out1:${tp.id}`); }
-        else if (to.port === "in2" && tp?.sw.in2) { queue.push(tk); if (tp.sw.in1) queue.push(`tp-in1:${tp.id}`); if (tp.sw.out1) queue.push(`tp-out1:${tp.id}`); }
-        else if (to.port === "out1" && tp?.sw.out1) queue.push(tk);
-      } else queue.push(tk);
+      const fk = pKey(link.from), tk = pKey(link.to);
+      // Bidirectional: from→to
+      if (fk === cur && !visited.has(tk)) tryEnter(link.to, d, queue);
+      // Bidirectional: to→from
+      if (tk === cur && !visited.has(fk)) tryEnter(link.from, d, queue);
     }
     // TP internal propagation
     if (cur.startsWith("tp-in1:")) { const tpId = cur.slice(7); const tp = d.tps.find(t => t.id === tpId);
       if (tp?.sw.in1) { if (tp.sw.in2) queue.push(`tp-in2:${tpId}`); if (tp.sw.out1) queue.push(`tp-out1:${tpId}`); } }
     if (cur.startsWith("tp-in2:")) { const tpId = cur.slice(7); const tp = d.tps.find(t => t.id === tpId);
       if (tp?.sw.in2) { if (tp.sw.in1) queue.push(`tp-in1:${tpId}`); if (tp.sw.out1) queue.push(`tp-out1:${tpId}`); } }
+    if (cur.startsWith("tp-out1:")) { const tpId = cur.slice(8); const tp = d.tps.find(t => t.id === tpId);
+      if (tp?.sw.out1) { if (tp.sw.in1) queue.push(`tp-in1:${tpId}`); if (tp.sw.in2) queue.push(`tp-in2:${tpId}`); } }
+    // 2БКТП internal propagation
+    const m2b = cur.match(/^tp-((?:in1|in2|out1)_[12]):(.+)$/);
+    if (m2b) {
+      const port = m2b[1], tpId = m2b[2];
+      const tp = d.tps.find(t => t.id === tpId);
+      if (tp?.type === "2bktp" && tp.sw[port]) {
+        const side = port.endsWith("_1") ? "_1" : "_2";
+        const otherSide = side === "_1" ? "_2" : "_1";
+        ["in1", "in2", "out1"].forEach(b => { const pp = b + side; if (pp !== port && tp.sw[pp]) queue.push(`tp-${pp}:${tpId}`); });
+        if (tp.sv10) ["in1", "in2", "out1"].forEach(b => { const pp = b + otherSide; if (tp.sw[pp]) queue.push(`tp-${pp}:${tpId}`); });
+      }
+    }
   }
   return false;
 }
@@ -157,6 +213,15 @@ const TP_W = 90, TP_H = 56;
 function getPortPos(p, d) {
   if (p.block === "tp") {
     const tp = d.tps.find(t => t.id === p.id); if (!tp) return null;
+    if (tp.type === "2bktp") {
+      if (p.port === "in1_1") return { x: tp.x, y: tp.y + 20 };
+      if (p.port === "in2_1") return { x: tp.x, y: tp.y + 44 };
+      if (p.port === "out1_1") return { x: tp.x, y: tp.y + 64 };
+      if (p.port === "in1_2") return { x: tp.x + TP2_W, y: tp.y + 20 };
+      if (p.port === "in2_2") return { x: tp.x + TP2_W, y: tp.y + 44 };
+      if (p.port === "out1_2") return { x: tp.x + TP2_W, y: tp.y + 64 };
+      return null;
+    }
     if (p.port === "in1") return { x: tp.x, y: tp.y + 18 };
     if (p.port === "in2") return { x: tp.x, y: tp.y + 34 };
     if (p.port === "out1") return { x: tp.x + TP_W, y: tp.y + 18 };
@@ -181,7 +246,11 @@ function getPortPos(p, d) {
 
 // ═══ MAIN ═══
 export default function App() {
-  const [d, setD] = useState(INIT);
+  const [d, setD] = useState(() => {
+    const saved = loadState();
+    if (!saved) return INIT;
+    return { ...INIT, ...saved };
+  });
   const [showLog, setShowLog] = useState(false);
   const [drag, setDrag] = useState(null);
   const [modal, setModal] = useState(null);
@@ -189,6 +258,7 @@ export default function App() {
   const [time, setTime] = useState(new Date());
   const svgRef = useRef(null);
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { saveState(d); }, [d]);
 
   const log = useCallback(desc => { setD(p => ({ ...p, switchLog: [{ t: new Date().toLocaleString("ru-RU"), d: desc }, ...p.switchLog].slice(0, 300) })); }, []);
 
@@ -199,6 +269,7 @@ export default function App() {
   const togLR = id => setD(p => { const l = d.lrs.find(x => x.id === id); log(`${l.name}: ${l.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...p, lrs: p.lrs.map(x => x.id === id ? { ...x, closed: !x.closed } : x) }; });
   const togKS = (krId, sId) => setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === krId ? { ...k, sections: k.sections.map(s => { if (s.id === sId) { log(`${k.name}/${s.name}: ${s.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...s, closed: !s.closed }; } return s; }) } : k) }));
   const togTP = (tpId, key) => setD(p => { const tp = p.tps.find(t => t.id === tpId); log(`${tp.name} ${key}: ${tp.sw[key] ? "ОТКЛ" : "ВКЛ"}`); return { ...p, tps: p.tps.map(t => t.id === tpId ? { ...t, sw: { ...t.sw, [key]: !t.sw[key] } } : t) }; });
+  const togTPsv = (tpId, key) => setD(p => { const tp = p.tps.find(t => t.id === tpId); log(`${tp.name} ${key}: ${tp[key] ? "ОТКЛ" : "ВКЛ"}`); return { ...p, tps: p.tps.map(t => t.id === tpId ? { ...t, [key]: !t[key] } : t) }; });
 
   // Port click for connecting
   const onPortClick = (portRef) => {
@@ -242,6 +313,38 @@ export default function App() {
   }});
   const delTP = id => { setD(p => ({ ...p, tps: p.tps.filter(t => t.id !== id), links: p.links.filter(l => !(l.from.block === "tp" && l.from.id === id) && !(l.to.block === "tp" && l.to.id === id)) })); setModal(null); };
 
+  // 2БКТП
+  const add2BKTP = () => {
+    const id = uid();
+    const x = 300 + d.tps.length * 20, y = 300 + d.tps.length * 15;
+    setD(p => ({ ...p, tps: [...p.tps, mk2BKTP(id, "Новая 2БКТП", 1000, 1000, x, y)] }));
+    setModal({ type: "e2bktp", id, f: { name: "Новая 2БКТП", power1: "1000", power2: "1000", meterHv1: "", meterHv2: "", cable10: "" } });
+  };
+  const edit2BKTP = tp => setModal({ type: "e2bktp", id: tp.id, f: {
+    name: tp.name, power1: String(tp.power1 || ""), power2: String(tp.power2 || ""),
+    meterHv1: tp.meterHv1 || "", meterHv2: tp.meterHv2 || "", cable10: tp.cable10 || "",
+  }});
+
+  // Export/Import
+  const exportState = () => {
+    const json = JSON.stringify(d, null, 2);
+    const blob = new Blob([json], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url;
+    a.download = `scada-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click(); URL.revokeObjectURL(url);
+  };
+  const importRef = useRef(null);
+  const importState = e => {
+    const file = e.target.files?.[0]; if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try { const data = JSON.parse(ev.target.result); setD(data); log("Импорт схемы из файла"); }
+      catch { alert("Ошибка чтения файла"); }
+    };
+    reader.readAsText(file); e.target.value = "";
+  };
+
   // KRUN
   const addKR = () => {
     const id = uid();
@@ -272,6 +375,7 @@ export default function App() {
     else if (type === "etp") setD(p => ({ ...p, tps: p.tps.map(t => t.id === id ? { ...t, name: f.name, power: Number(f.power) || 0, meterHv: f.meterHv, rm6Type: f.rm6Type, cable10: f.cable10, trNominal: Number(f.trNominal) || 0, cells04: Number(f.cells04) || 12, cellNominal: Number(f.cellNominal) || 630 } : t) }));
     else if (type === "ekr") setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === id ? { ...k, name: f.name, sections: f.sections } : k) }));
     else if (type === "elr") setD(p => ({ ...p, lrs: p.lrs.map(l => l.id === id ? { ...l, name: f.name, meter: f.meter } : l) }));
+    else if (type === "e2bktp") setD(p => ({ ...p, tps: p.tps.map(t => t.id === id ? { ...t, name: f.name, power1: Number(f.power1) || 0, power2: Number(f.power2) || 0, meterHv1: f.meterHv1, meterHv2: f.meterHv2, cable10: f.cable10 } : t) }));
     setModal(null);
   };
   const delLink = id => setD(p => ({ ...p, links: p.links.filter(l => l.id !== id) }));
@@ -301,7 +405,10 @@ export default function App() {
     return () => { window.removeEventListener("mousemove", onMM); window.removeEventListener("mouseup", onMU); }; }, [onMM, onMU]);
 
   const s1 = busOn("bus-1", d), s2 = busOn("bus-2", d), rp = busOn("bus-rp", d);
-  const tpOnCnt = d.tps.filter(t => isEnergized(`tp-in1:${t.id}`, d) && t.sw.tr).length;
+  const tpOnCnt = d.tps.filter(t => {
+    if (t.type === "2bktp") return (isEnergized(`tp-in1_1:${t.id}`, d) && t.sw.tr_1) || (isEnergized(`tp-in1_2:${t.id}`, d) && t.sw.tr_2);
+    return isEnergized(`tp-in1:${t.id}`, d) && t.sw.tr;
+  }).length;
   
   // Large canvas
   const CANVAS_W = 3000, CANVAS_H = 2000;
@@ -372,7 +479,7 @@ export default function App() {
   const fitAll = () => {
     // Calculate bounding box of all objects
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    d.tps.forEach(t => { minX = Math.min(minX, t.x); minY = Math.min(minY, t.y); maxX = Math.max(maxX, t.x + TP_W); maxY = Math.max(maxY, t.y + TP_H); });
+    d.tps.forEach(t => { const w = t.type === "2bktp" ? TP2_W : TP_W; const h = t.type === "2bktp" ? TP2_H : TP_H; minX = Math.min(minX, t.x); minY = Math.min(minY, t.y); maxX = Math.max(maxX, t.x + w); maxY = Math.max(maxY, t.y + h); });
     d.kruns.forEach(k => { minX = Math.min(minX, k.x); minY = Math.min(minY, k.y); maxX = Math.max(maxX, k.x + k.sections.length * 46 + 40); maxY = Math.max(maxY, k.y + 80); });
     d.lrs.forEach(l => { minX = Math.min(minX, l.x); minY = Math.min(minY, l.y); maxX = Math.max(maxX, l.x + 60); maxY = Math.max(maxY, l.y + 40); });
     minX = Math.min(minX, 30); minY = Math.min(minY, 50);
@@ -436,8 +543,13 @@ export default function App() {
           </span>}
           <button onClick={addCell} style={{ padding: "1px 6px", borderRadius: 2, background: BUS + "10", border: `1px solid ${BUS}40`, color: BUS, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ Яч.</button>
           <button onClick={addTP} style={{ padding: "1px 6px", borderRadius: 2, background: ON + "10", border: `1px solid ${ON}40`, color: ON, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ ТП</button>
+          <button onClick={add2BKTP} style={{ padding: "1px 6px", borderRadius: 2, background: WC + "10", border: `1px solid ${WC}40`, color: WC, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ 2БКТП</button>
           <button onClick={addKR} style={{ padding: "1px 6px", borderRadius: 2, background: KR + "10", border: `1px solid ${KR}40`, color: KR, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ КРУН</button>
           <button onClick={addLR} style={{ padding: "1px 6px", borderRadius: 2, background: LRC + "10", border: `1px solid ${LRC}40`, color: LRC, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ ЛР</button>
+          <button onClick={exportState} style={{ padding: "1px 5px", borderRadius: 2, background: "none", border: `1px solid ${WC}30`, color: WC, fontSize: 7, cursor: "pointer", fontFamily: FN }}>Экспорт</button>
+          <button onClick={() => importRef.current?.click()} style={{ padding: "1px 5px", borderRadius: 2, background: "none", border: `1px solid ${WC}30`, color: WC, fontSize: 7, cursor: "pointer", fontFamily: FN }}>Импорт</button>
+          <input ref={importRef} type="file" accept=".json" onChange={importState} style={{ display: "none" }} />
+          <button onClick={() => { if (confirm("Сбросить все изменения к начальному состоянию?")) { localStorage.removeItem(STORAGE_KEY); setD(INIT); } }} style={{ padding: "1px 5px", borderRadius: 2, background: "none", border: `1px solid ${OFF}30`, color: OFF, fontSize: 7, cursor: "pointer", fontFamily: FN }}>⟲ Сброс</button>
           <button onClick={() => setShowLog(!showLog)} style={{ padding: "1px 5px", borderRadius: 2, background: "none", border: `1px solid ${TD}30`, color: TD, fontSize: 7, cursor: "pointer", fontFamily: FN }}>◷{d.switchLog.length}</button>
         </div>
       </div>
@@ -572,8 +684,8 @@ export default function App() {
             </g>);
           })}
 
-          {/* TPs — with RM6 ports: in1, in2, D(tr), out1 */}
-          {d.tps.map(tp => {
+          {/* TPs — regular (not 2bktp) */}
+          {d.tps.filter(t => t.type !== "2bktp").map(tp => {
             const in1On = isEnergized(`tp-in1:${tp.id}`, d);
             const trOn = in1On && tp.sw.tr;
             const outOn = in1On && tp.sw.out1;
@@ -617,6 +729,91 @@ export default function App() {
               <Port x={tp.x + TP_W} y={tp.y + 18} on={outOn} label="I вых" portRef={{ block: "tp", id: tp.id, port: "out1" }} />
             </g>);
           })}
+
+          {/* 2БКТП */}
+          {d.tps.filter(t => t.type === "2bktp").map(tp => {
+            const s1on = isEnergized(`tp-in1_1:${tp.id}`, d);
+            const s2on = isEnergized(`tp-in1_2:${tp.id}`, d);
+            const tr1on = s1on && tp.sw.tr_1;
+            const tr2on = s2on && tp.sw.tr_2;
+            const out1on = s1on && tp.sw.out1_1;
+            const out2on = s2on && tp.sw.out1_2;
+            const in2_1on = isEnergized(`tp-in2_1:${tp.id}`, d);
+            const in2_2on = isEnergized(`tp-in2_2:${tp.id}`, d);
+            const anyOn = tr1on || tr2on;
+            const W = TP2_W, H = TP2_H, cx = tp.x + W / 2;
+            return (<g key={tp.id} onMouseDown={e => startDrag(e, "tp", tp.id)} style={{ cursor: drag ? "grabbing" : "grab" }}>
+              {/* Background */}
+              <rect x={tp.x} y={tp.y} width={W} height={H} rx={5}
+                fill={anyOn ? "#0d1f12" : s1on || s2on ? "#111a10" : "#1a1212"}
+                stroke={anyOn ? ON + "60" : s1on || s2on ? BUS + "30" : "#26323850"} strokeWidth={1.2} />
+              {/* Title */}
+              <text x={cx} y={tp.y - 4} textAnchor="middle" fill={anyOn ? BUS : s1on || s2on ? "#a5d6a7" : TD}
+                fontSize={9} fontWeight="bold" fontFamily={FN} style={{ cursor: "pointer" }}
+                onClick={e => { e.stopPropagation(); edit2BKTP(tp); }}>{tp.name}</text>
+              {/* Center divider */}
+              <line x1={cx} y1={tp.y + 4} x2={cx} y2={tp.y + H - 4} stroke="#263238" strokeWidth={1} strokeDasharray="3" />
+              <text x={cx} y={tp.y - 12} textAnchor="middle" fill={TM} fontSize={6} fontFamily={FN}>2БКТП</text>
+
+              {/* === LEFT RM6 #1 === */}
+              {/* Port in1_1 */}
+              <Port x={tp.x} y={tp.y + 20} on={s1on} label="I вв" portRef={{ block: "tp", id: tp.id, port: "in1_1" }} />
+              <line x1={tp.x + 5} y1={tp.y + 20} x2={tp.x + 16} y2={tp.y + 20} stroke={s1on ? WC : WO} strokeWidth={1.5} />
+              <Sw x={tp.x + 22} y={tp.y + 20} on={tp.sw.in1_1} onClick={() => togTP(tp.id, "in1_1")} />
+              {/* Left bus */}
+              <line x1={tp.x + 28} y1={tp.y + 20} x2={cx - 16} y2={tp.y + 20} stroke={s1on ? WC : WO} strokeWidth={1} />
+              {/* Port in2_1 */}
+              <Port x={tp.x} y={tp.y + 44} on={in2_1on} label="II вв" portRef={{ block: "tp", id: tp.id, port: "in2_1" }} />
+              <line x1={tp.x + 5} y1={tp.y + 44} x2={tp.x + 16} y2={tp.y + 44} stroke={in2_1on ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + 22} y={tp.y + 44} on={tp.sw.in2_1} onClick={() => togTP(tp.id, "in2_1")} sz={8} />
+              <line x1={tp.x + 28} y1={tp.y + 44} x2={tp.x + 28} y2={tp.y + 20} stroke={WO} strokeWidth={.5} strokeDasharray="2" />
+              {/* D/tr_1 */}
+              <line x1={tp.x + 45} y1={tp.y + 20} x2={tp.x + 45} y2={tp.y + 30} stroke={s1on ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + 45} y={tp.y + 35} on={tp.sw.tr_1} onClick={() => togTP(tp.id, "tr_1")} sz={9} />
+              <text x={tp.x + 45} y={tp.y + 29} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>D</text>
+              <circle cx={tp.x + 45} cy={tp.y + 44} r={3} fill="none" stroke={tr1on ? BUS : BUSOFF} strokeWidth={1} />
+              <circle cx={tp.x + 45} cy={tp.y + 50} r={3} fill="none" stroke={tr1on ? WC : WO} strokeWidth={1} />
+              <text x={tp.x + 45} y={tp.y + 58} textAnchor="middle" fill={tr1on ? ON : TM} fontSize={5} fontFamily={FN}>
+                {tr1on ? "● 0.4-I" : "○ 0.4-I"}</text>
+              {/* Port out1_1 */}
+              <Port x={tp.x} y={tp.y + 64} on={out1on} label="I вых" portRef={{ block: "tp", id: tp.id, port: "out1_1" }} />
+              <line x1={tp.x + 5} y1={tp.y + 64} x2={tp.x + 16} y2={tp.y + 64} stroke={out1on ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + 22} y={tp.y + 64} on={tp.sw.out1_1} onClick={() => togTP(tp.id, "out1_1")} sz={8} />
+              <line x1={tp.x + 28} y1={tp.y + 64} x2={tp.x + 28} y2={tp.y + 20} stroke={WO} strokeWidth={.5} strokeDasharray="2" />
+
+              {/* === CENTER: sv10 & sv04 === */}
+              <Sw x={cx} y={tp.y + 20} on={tp.sv10} onClick={() => togTPsv(tp.id, "sv10")} sz={10} />
+              <text x={cx} y={tp.y + 12} textAnchor="middle" fill={tp.sv10 ? ON : TM} fontSize={5} fontFamily={FN}>СВ10</text>
+              <Sw x={cx} y={tp.y + 58} on={tp.sv04} onClick={() => togTPsv(tp.id, "sv04")} sz={10} />
+              <text x={cx} y={tp.y + 70} textAnchor="middle" fill={tp.sv04 ? ON : TM} fontSize={5} fontFamily={FN}>СВ04</text>
+
+              {/* === RIGHT RM6 #2 === */}
+              {/* Port in1_2 */}
+              <Port x={tp.x + W} y={tp.y + 20} on={s2on} label="I вв" portRef={{ block: "tp", id: tp.id, port: "in1_2" }} />
+              <line x1={tp.x + W - 5} y1={tp.y + 20} x2={tp.x + W - 16} y2={tp.y + 20} stroke={s2on ? WC : WO} strokeWidth={1.5} />
+              <Sw x={tp.x + W - 22} y={tp.y + 20} on={tp.sw.in1_2} onClick={() => togTP(tp.id, "in1_2")} />
+              {/* Right bus */}
+              <line x1={cx + 16} y1={tp.y + 20} x2={tp.x + W - 28} y2={tp.y + 20} stroke={s2on ? WC : WO} strokeWidth={1} />
+              {/* Port in2_2 */}
+              <Port x={tp.x + W} y={tp.y + 44} on={in2_2on} label="II вв" portRef={{ block: "tp", id: tp.id, port: "in2_2" }} />
+              <line x1={tp.x + W - 5} y1={tp.y + 44} x2={tp.x + W - 16} y2={tp.y + 44} stroke={in2_2on ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + W - 22} y={tp.y + 44} on={tp.sw.in2_2} onClick={() => togTP(tp.id, "in2_2")} sz={8} />
+              <line x1={tp.x + W - 28} y1={tp.y + 44} x2={tp.x + W - 28} y2={tp.y + 20} stroke={WO} strokeWidth={.5} strokeDasharray="2" />
+              {/* D/tr_2 */}
+              <line x1={tp.x + W - 45} y1={tp.y + 20} x2={tp.x + W - 45} y2={tp.y + 30} stroke={s2on ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + W - 45} y={tp.y + 35} on={tp.sw.tr_2} onClick={() => togTP(tp.id, "tr_2")} sz={9} />
+              <text x={tp.x + W - 45} y={tp.y + 29} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>D</text>
+              <circle cx={tp.x + W - 45} cy={tp.y + 44} r={3} fill="none" stroke={tr2on ? BUS : BUSOFF} strokeWidth={1} />
+              <circle cx={tp.x + W - 45} cy={tp.y + 50} r={3} fill="none" stroke={tr2on ? WC : WO} strokeWidth={1} />
+              <text x={tp.x + W - 45} y={tp.y + 58} textAnchor="middle" fill={tr2on ? ON : TM} fontSize={5} fontFamily={FN}>
+                {tr2on ? "● 0.4-II" : "○ 0.4-II"}</text>
+              {/* Port out1_2 */}
+              <Port x={tp.x + W} y={tp.y + 64} on={out2on} label="I вых" portRef={{ block: "tp", id: tp.id, port: "out1_2" }} />
+              <line x1={tp.x + W - 5} y1={tp.y + 64} x2={tp.x + W - 16} y2={tp.y + 64} stroke={out2on ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + W - 22} y={tp.y + 64} on={tp.sw.out1_2} onClick={() => togTP(tp.id, "out1_2")} sz={8} />
+              <line x1={tp.x + W - 28} y1={tp.y + 64} x2={tp.x + W - 28} y2={tp.y + 20} stroke={WO} strokeWidth={.5} strokeDasharray="2" />
+            </g>);
+          })}
         </svg>
       </div>
 
@@ -637,8 +834,8 @@ export default function App() {
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
             <h3 style={{ margin: 0, color: "#4fc3f7", fontFamily: FN, fontSize: 13 }}>
               {modal.type === "ac" ? "＋ Новая ячейка" : modal.type === "ec" ? `✎ Ячейка ${modal.f.num}` :
-                modal.type === "etp" ? `✎ ${modal.f.name}` : modal.type === "ekr" ? `✎ ${modal.f.name}` :
-                modal.type === "elr" ? `✎ ${modal.f.name}` : ""}</h3>
+                modal.type === "etp" ? `✎ ${modal.f.name}` : modal.type === "e2bktp" ? `✎ ${modal.f.name}` :
+                modal.type === "ekr" ? `✎ ${modal.f.name}` : modal.type === "elr" ? `✎ ${modal.f.name}` : ""}</h3>
             <button onClick={() => setModal(null)} style={{ background: BG, border: "1px solid #37474f", color: TD, cursor: "pointer", fontSize: 14, width: 24, height: 24, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
           </div>
 
@@ -693,6 +890,30 @@ export default function App() {
             {dangerBtn("🗑 Удалить ТП и все связи", () => delTP(modal.id))}
           </>}
 
+          {/* === 2БКТП === */}
+          {modal.type === "e2bktp" && <>
+            {fld("Название 2БКТП", modal.f.name, v => uf("name", v))}
+            {fld("Марка кабеля 10кВ", modal.f.cable10, v => uf("cable10", v), "text", "АСБЛ 3×240")}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 9, color: WC, fontWeight: 600 }}>Трансформатор #1 (левый)</span></div>
+            {fld("Мощность Т1, кВА", modal.f.power1, v => uf("power1", v), "number", "1000")}
+            {fld("Счётчик ВН #1", modal.f.meterHv1, v => uf("meterHv1", v), "text", "№ счётчика")}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 9, color: WC, fontWeight: 600 }}>Трансформатор #2 (правый)</span></div>
+            {fld("Мощность Т2, кВА", modal.f.power2, v => uf("power2", v), "number", "1000")}
+            {fld("Счётчик ВН #2", modal.f.meterHv2, v => uf("meterHv2", v), "text", "№ счётчика")}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8 }}>
+              <span style={{ fontSize: 8, color: TD }}>Подключённые кабели 10кВ:</span>
+              {d.links.filter(l => (l.from.block === "tp" && l.from.id === modal.id) || (l.to.block === "tp" && l.to.id === modal.id)).map(l => (
+                <div key={l.id} style={{ fontSize: 8, color: TXT, padding: "2px 0", display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: WC }}>●</span> {pKey(l.from)} → {pKey(l.to)} {l.cable && <span style={{ color: TM }}>({l.cable})</span>}
+                  <button onClick={() => delLink(l.id)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {dangerBtn("🗑 Удалить 2БКТП и все связи", () => delTP(modal.id))}
+          </>}
+
           {/* === КРУН === */}
           {modal.type === "ekr" && <>
             {fld("Название КРУНа", modal.f.name, v => uf("name", v))}
@@ -707,7 +928,7 @@ export default function App() {
                   style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 11 }}>✕</button>}
               </div>
             ))}
-            {modal.f.sections.length < 4 && <button onClick={() => uf("sections", [...modal.f.sections, { id: uid(), name: `С${modal.f.sections.length + 1}`, closed: true }])}
+            {modal.f.sections.length < 4 && <button onClick={() => uf("sections", [...modal.f.sections, { id: `${modal.id}-s${modal.f.sections.length + 1}`, name: `С${modal.f.sections.length + 1}`, closed: true }])}
               style={{ padding: "3px 8px", background: KR + "10", border: `1px solid ${KR}40`, borderRadius: 4, color: KR, fontFamily: FN, fontSize: 8, cursor: "pointer", marginTop: 4 }}>＋ Добавить секцию</button>}
             <div style={{ borderTop: "1px solid #263238", marginTop: 10, paddingTop: 8 }}>
               <span style={{ fontSize: 8, color: TD }}>Подключённые кабели:</span>
