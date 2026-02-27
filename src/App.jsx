@@ -43,7 +43,7 @@ const saveState = (d) => {
 };
 
 const INIT = {
-  buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" }, { id: "bus-rp", name: "РП-25" }],
+  buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" }, { id: "bus-rp", name: "РП-25", x: 100, y: 510 }],
   inputBreakers: [
     { id: "ib1", feedName: "Ф-213", busId: "bus-1", closed: true },
     { id: "ib2", feedName: "Ф-313", busId: "bus-2", closed: true },
@@ -241,7 +241,11 @@ function getPortPos(p, d) {
     return { x: 50 + idx * 70 + 15, y: 105 };
   }
   if (p.block === "bus") {
-    if (p.id === "bus-rp") return { x: 200, y: 536 }; // РП-25 output port position
+    if (p.id === "bus-rp") {
+      const rpBus = d.buses.find(b => b.id === "bus-rp");
+      const rx = rpBus?.x ?? 100, ry = rpBus?.y ?? 510;
+      return { x: rx + 100, y: ry + 26 }; // center output port
+    }
     return { x: 780, y: 105 };
   }
   return null;
@@ -402,6 +406,7 @@ export default function App() {
     if (drag.type === "tp") setD(p => ({ ...p, tps: p.tps.map(t => t.id === drag.id ? { ...t, x: t.x + dx, y: t.y + dy } : t) }));
     else if (drag.type === "krun") setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === drag.id ? { ...k, x: k.x + dx, y: k.y + dy } : k) }));
     else if (drag.type === "lr") setD(p => ({ ...p, lrs: p.lrs.map(l => l.id === drag.id ? { ...l, x: l.x + dx, y: l.y + dy } : l) }));
+    else if (drag.type === "rp") setD(p => ({ ...p, buses: p.buses.map(b => b.id === drag.id ? { ...b, x: (b.x || 0) + dx, y: (b.y || 0) + dy } : b) }));
     setDrag(pr => ({ ...pr, sx: sp.x, sy: sp.y })); }, [drag]);
   const onMU = useCallback(() => setDrag(null), []);
   useEffect(() => { window.addEventListener("mousemove", onMM); window.addEventListener("mouseup", onMU);
@@ -485,6 +490,9 @@ export default function App() {
     d.tps.forEach(t => { const w = t.type === "2bktp" ? TP2_W : TP_W; const h = t.type === "2bktp" ? TP2_H : TP_H; minX = Math.min(minX, t.x); minY = Math.min(minY, t.y); maxX = Math.max(maxX, t.x + w); maxY = Math.max(maxY, t.y + h); });
     d.kruns.forEach(k => { minX = Math.min(minX, k.x); minY = Math.min(minY, k.y); maxX = Math.max(maxX, k.x + k.sections.length * 46 + 40); maxY = Math.max(maxY, k.y + 80); });
     d.lrs.forEach(l => { minX = Math.min(minX, l.x); minY = Math.min(minY, l.y); maxX = Math.max(maxX, l.x + 60); maxY = Math.max(maxY, l.y + 40); });
+    // Include RP-25 block
+    const rpBus = d.buses.find(b => b.id === "bus-rp");
+    if (rpBus?.x != null) { minX = Math.min(minX, rpBus.x - 10); minY = Math.min(minY, rpBus.y - 50); maxX = Math.max(maxX, rpBus.x + 210); maxY = Math.max(maxY, rpBus.y + 40); }
     minX = Math.min(minX, 30); minY = Math.min(minY, 50);
     maxX = Math.max(maxX, d.cells.length * 70 + 100);
     if (minX === Infinity) return resetView();
@@ -602,16 +610,18 @@ export default function App() {
             </>;
           })()}
 
-          {/* РП-25 — отдельный блок внизу с двумя независимыми вводами */}
+          {/* РП-25 — отдельный блок с двумя независимыми вводами */}
           {(() => {
-            const rpX = 100, rpY = 510, rpW = 200;
+            const rpBus = d.buses.find(b => b.id === "bus-rp");
+            if (!rpBus) return null;
+            const rpX = rpBus.x ?? 100, rpY = rpBus.y ?? 510, rpW = 200;
             const rpIBs = d.inputBreakers.filter(ib => ib.busId === "bus-rp");
             const rpOn = busOn("bus-rp", d);
             return (
-              <g>
+              <g onMouseDown={e => startDrag(e, "rp", "bus-rp")} style={{ cursor: drag ? "grabbing" : "grab" }}>
                 {/* Background */}
                 <rect x={rpX - 10} y={rpY - 45} width={rpW + 20} height={85} rx={6}
-                  fill={rpOn ? "#0a1a1a" : "#121212"} stroke={rpOn ? WC + "40" : "#26323850"} strokeWidth={1.2} />
+                  fill={rpOn ? "#0a1f1f" : "#151515"} stroke={rpOn ? WC + "80" : "#3a4a50"} strokeWidth={1.5} />
                 {/* Title */}
                 <text x={rpX + rpW / 2} y={rpY - 50} textAnchor="middle" fill={rpOn ? WC : TD}
                   fontSize={10} fontWeight="bold" fontFamily={FN}>РП-25</text>
