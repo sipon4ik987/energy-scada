@@ -230,52 +230,78 @@ function portDir(p, d) {
   }
   return "d";
 }
-const STUB = 20; // length of initial stub exiting port
-function orthoPath(x1, y1, dir1, x2, y2, dir2) {
-  // Build orthogonal path between two ports with given exit directions
-  // Start with stub from port 1
+const STUB = 20;
+// Build SVG path with waypoints: port1 → stub → [waypoints] → stub → port2
+// Each segment between consecutive points is routed as L-shape (one bend)
+function orthoPath(x1, y1, dir1, x2, y2, dir2, waypoints) {
   const pts = [[x1, y1]];
-  let sx1 = x1, sy1 = y1, sx2 = x2, sy2 = y2;
+  // Stub from port 1
+  let sx1 = x1, sy1 = y1;
   if (dir1 === "d") sy1 += STUB;
   else if (dir1 === "u") sy1 -= STUB;
   else if (dir1 === "l") sx1 -= STUB;
   else if (dir1 === "r") sx1 += STUB;
   pts.push([sx1, sy1]);
-  // End stub from port 2
-  let ex2 = x2, ey2 = y2;
-  if (dir2 === "d") ey2 += STUB;
-  else if (dir2 === "u") ey2 -= STUB;
-  else if (dir2 === "l") ex2 -= STUB;
-  else if (dir2 === "r") ex2 += STUB;
-  // Route from stub1 end to stub2 end with at most 2 bends
-  const midPts = routeOrtho(sx1, sy1, dir1, ex2, ey2, dir2);
-  pts.push(...midPts);
-  pts.push([ex2, ey2]);
-  pts.push([x2, y2]);
-  // Build SVG path
+
+  if (waypoints && waypoints.length > 0) {
+    // Route through each waypoint with L-shaped segments
+    let px = sx1, py = sy1, lastVert = (dir1 === "d" || dir1 === "u");
+    for (const wp of waypoints) {
+      // L-shape: if last was vertical go horizontal-first, else vertical-first
+      if (lastVert) {
+        pts.push([wp.x, py]); // horizontal to wp.x
+        pts.push([wp.x, wp.y]); // vertical to wp.y
+        lastVert = true; // ended with vertical
+      } else {
+        pts.push([px, wp.y]); // vertical to wp.y
+        pts.push([wp.x, wp.y]); // horizontal to wp.x
+        lastVert = false; // ended with horizontal
+      }
+      px = wp.x; py = wp.y;
+    }
+    // Final segment to stub2
+    let ex2 = x2, ey2 = y2;
+    if (dir2 === "d") ey2 += STUB;
+    else if (dir2 === "u") ey2 -= STUB;
+    else if (dir2 === "l") ex2 -= STUB;
+    else if (dir2 === "r") ex2 += STUB;
+    if (lastVert) {
+      pts.push([ex2, py]);
+      pts.push([ex2, ey2]);
+    } else {
+      pts.push([px, ey2]);
+      pts.push([ex2, ey2]);
+    }
+    pts.push([x2, y2]);
+  } else {
+    // Auto-route without waypoints
+    let ex2 = x2, ey2 = y2;
+    if (dir2 === "d") ey2 += STUB;
+    else if (dir2 === "u") ey2 -= STUB;
+    else if (dir2 === "l") ex2 -= STUB;
+    else if (dir2 === "r") ex2 += STUB;
+    const isV1 = dir1 === "d" || dir1 === "u";
+    const isV2 = dir2 === "d" || dir2 === "u";
+    if (isV1 && isV2) { const my = (sy1 + ey2) / 2; pts.push([sx1, my], [ex2, my]); }
+    else if (!isV1 && !isV2) { const mx = (sx1 + ex2) / 2; pts.push([mx, sy1], [mx, ey2]); }
+    else if (isV1) pts.push([sx1, ey2]);
+    else pts.push([ex2, sy1]);
+    pts.push([ex2, ey2]);
+    pts.push([x2, y2]);
+  }
   return pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
 }
-function routeOrtho(x1, y1, d1, x2, y2, d2) {
-  // Returns intermediate points for orthogonal routing between stub endpoints
-  const isVert1 = d1 === "d" || d1 === "u";
-  const isVert2 = d2 === "d" || d2 === "u";
-  if (isVert1 && isVert2) {
-    // Both vertical stubs → horizontal middle segment
-    const midY = (y1 + y2) / 2;
-    return [[x1, midY], [x2, midY]];
+// Find best insertion index for a new waypoint along existing waypoints
+function findWpInsertIdx(fp, tp, waypoints, clickX, clickY) {
+  const allPts = [fp, ...(waypoints || []).map(w => ({ x: w.x, y: w.y })), tp];
+  let bestIdx = 0, bestDist = Infinity;
+  for (let i = 0; i < allPts.length - 1; i++) {
+    const ax = allPts[i].x, ay = allPts[i].y, bx = allPts[i + 1].x, by = allPts[i + 1].y;
+    const mx = (ax + bx) / 2, my = (ay + by) / 2;
+    const dist = Math.hypot(clickX - mx, clickY - my);
+    if (dist < bestDist) { bestDist = dist; bestIdx = i; }
   }
-  if (!isVert1 && !isVert2) {
-    // Both horizontal stubs → vertical middle segment
-    const midX = (x1 + x2) / 2;
-    return [[midX, y1], [midX, y2]];
-  }
-  // One vertical, one horizontal → single bend
-  if (isVert1) {
-    // port1 exits vertically, port2 exits horizontally → bend at (x1, y2) or (x2, y1)
-    return [[x1, y2]];
-  }
-  // port1 exits horizontally, port2 exits vertically
-  return [[x2, y1]];
+  return bestIdx; // insert after waypoints[bestIdx - 1], before waypoints[bestIdx]
 }
 
 // ═══ MAIN ═══
@@ -289,6 +315,7 @@ export default function App() {
   const [drag, setDrag] = useState(null);
   const [modal, setModal] = useState(null);
   const [connecting, setConnecting] = useState(null); // {block,id,port} or null
+  const [selLink, setSelLink] = useState(null); // selected link id for waypoint editing
   const [time, setTime] = useState(new Date());
   const svgRef = useRef(null);
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
@@ -307,12 +334,36 @@ export default function App() {
   const togRPinput = busId => setD(p => ({ ...p, buses: p.buses.map(b => b.id === busId ? { ...b, inputOn: !b.inputOn } : b) }));
   const togRPfeeder = (busId, fId) => setD(p => ({ ...p, buses: p.buses.map(b => b.id === busId ? { ...b, feeders: b.feeders.map(f => f.id === fId ? { ...f, closed: !f.closed } : f) } : b) }));
 
+  // SVG coord helper
+  const clientToSvg = (clientX, clientY) => {
+    const svg = svgRef.current; if (!svg) return null;
+    const pt = svg.createSVGPoint(); pt.x = clientX; pt.y = clientY;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  };
+
+  // Waypoint management
+  const addWaypoint = (linkId, x, y, insertIdx) => {
+    setD(p => ({ ...p, links: p.links.map(l => {
+      if (l.id !== linkId) return l;
+      const wps = [...(l.waypoints || [])];
+      wps.splice(insertIdx, 0, { x, y });
+      return { ...l, waypoints: wps };
+    })}));
+  };
+  const delWaypoint = (linkId, wpIdx) => {
+    setD(p => ({ ...p, links: p.links.map(l => {
+      if (l.id !== linkId) return l;
+      const wps = (l.waypoints || []).filter((_, i) => i !== wpIdx);
+      return { ...l, waypoints: wps };
+    })}));
+  };
+
   // Port click for connecting
   const onPortClick = (portRef) => {
     if (!connecting) { setConnecting(portRef); return; }
     // Create link
     const id = uid();
-    setD(p => ({ ...p, links: [...p.links, { id, from: connecting, to: portRef, cable: "" }] }));
+    setD(p => ({ ...p, links: [...p.links, { id, from: connecting, to: portRef, cable: "", waypoints: [] }] }));
     log(`Кабель: ${pKey(connecting)} → ${pKey(portRef)}`);
     setConnecting(null);
   };
@@ -417,14 +468,14 @@ export default function App() {
   const delLink = id => setD(p => ({ ...p, links: p.links.filter(l => l.id !== id) }));
 
   // Drag
-  const startDrag = (e, type, id) => {
+  const startDrag = (e, type, id, extra) => {
     if (e.button !== 0 || connecting) return;
     if (e.defaultPrevented) return;
     if (e.altKey) return; // alt+click is for panning
     const svg = svgRef.current; if (!svg) return;
     const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
     const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
-    setDrag({ type, id, sx: sp.x, sy: sp.y }); e.preventDefault();
+    setDrag({ type, id, sx: sp.x, sy: sp.y, ...extra }); e.preventDefault();
   };
   const onMM = useCallback(e => { if (!drag) return; const svg = svgRef.current; if (!svg) return;
     const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
@@ -437,6 +488,12 @@ export default function App() {
     else if (drag.type === "lr") setD(p => ({ ...p, lrs: p.lrs.map(l => l.id === drag.id ? { ...l, x: l.x + dx, y: l.y + dy } : l) }));
     else if (drag.type === "rp") setD(p => ({ ...p, buses: p.buses.map(b => b.id === drag.id ? { ...b, x: (b.x || 0) + dx, y: (b.y || 0) + dy } : b) }));
     else if (drag.type === "ps") setD(p => ({ ...p, psBlock: { x: (p.psBlock?.x || 200) + dx, y: (p.psBlock?.y || 10) + dy } }));
+    else if (drag.type === "wp") setD(p => ({ ...p, links: p.links.map(l => {
+      if (l.id !== drag.id) return l;
+      const wps = [...(l.waypoints || [])];
+      wps[drag.wpIdx] = { x: wps[drag.wpIdx].x + dx, y: wps[drag.wpIdx].y + dy };
+      return { ...l, waypoints: wps };
+    })}));
     setDrag(pr => ({ ...pr, sx: sp.x, sy: sp.y })); }, [drag]);
   const onMU = useCallback(() => setDrag(null), []);
   useEffect(() => { window.addEventListener("mousemove", onMM); window.addEventListener("mouseup", onMU);
@@ -621,7 +678,7 @@ export default function App() {
       </div>
 
       {/* SVG Canvas with Pan & Zoom */}
-      <div ref={containerRef} onMouseDown={onPanStart}
+      <div ref={containerRef} onMouseDown={onPanStart} onClick={() => selLink && setSelLink(null)}
         style={{ flex: 1, overflow: "hidden", background: `radial-gradient(ellipse at 50% 20%, #111a24 0%, ${DK} 70%)`, position: "relative", cursor: panning ? "grabbing" : "default" }}>
         
         {/* Zoom controls */}
@@ -770,25 +827,55 @@ export default function App() {
             );
           })()}
 
-          {/* Cables — orthogonal routing */}
+          {/* Cables — orthogonal routing with editable waypoints */}
           {d.links.map(link => {
             const fp = getPortPos(link.from, d); const tp = getPortPos(link.to, d);
             if (!fp || !tp) return null;
             const fOn = portEnergized(link.from, d); const tOn = portEnergized(link.to, d);
             const on = fOn && tOn;
             const d1 = portDir(link.from, d), d2 = portDir(link.to, d);
-            const pathD = orthoPath(fp.x, fp.y, d1, tp.x, tp.y, d2);
+            const wps = link.waypoints || [];
+            const pathD = orthoPath(fp.x, fp.y, d1, tp.x, tp.y, d2, wps);
             const mx = (fp.x + tp.x) / 2, my = (fp.y + tp.y) / 2;
+            const isSel = selLink === link.id;
             return (<g key={link.id}>
-              <path d={pathD} fill="none" stroke={on ? WC : WO} strokeWidth={on ? 1.8 : .8}
+              {/* Invisible fat path for easier clicking */}
+              <path d={pathD} fill="none" stroke="transparent" strokeWidth={12}
+                style={{ cursor: "pointer" }}
+                onClick={e => { e.stopPropagation(); setSelLink(isSel ? null : link.id); }}
+                onDoubleClick={e => {
+                  e.stopPropagation();
+                  const sp = clientToSvg(e.clientX, e.clientY); if (!sp) return;
+                  const idx = findWpInsertIdx(fp, tp, wps, sp.x, sp.y);
+                  addWaypoint(link.id, sp.x, sp.y, idx);
+                  setSelLink(link.id);
+                }} />
+              {/* Visible path */}
+              <path d={pathD} fill="none"
+                stroke={isSel ? "#ffab00" : on ? WC : WO}
+                strokeWidth={isSel ? 2 : on ? 1.8 : .8}
                 strokeLinejoin="round" strokeLinecap="round"
-                style={on ? { filter: `drop-shadow(0 0 2px ${WC}40)` } : {}} />
+                style={on && !isSel ? { filter: `drop-shadow(0 0 2px ${WC}40)` } : {}}
+                pointerEvents="none" />
+              {/* Cable label */}
               {link.cable && <text x={mx} y={my - 4} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>{link.cable}</text>}
               {/* Delete X */}
-              <g onClick={e => { e.stopPropagation(); delLink(link.id); }} style={{ cursor: "pointer" }}>
+              <g onClick={e => { e.stopPropagation(); delLink(link.id); setSelLink(null); }} style={{ cursor: "pointer" }}>
                 <circle cx={mx} cy={my} r={4} fill="#2a1010" stroke="#4a2020" strokeWidth={.5} opacity={.6} />
                 <text x={mx} y={my + 2.5} textAnchor="middle" fill={OFF} fontSize={6} fontFamily={FN}>✕</text>
               </g>
+              {/* Waypoint handles when selected */}
+              {isSel && wps.map((wp, i) => (
+                <g key={i}>
+                  <circle cx={wp.x} cy={wp.y} r={5} fill="#ffab00" stroke="#fff" strokeWidth={1}
+                    style={{ cursor: "grab" }}
+                    onMouseDown={e => { e.stopPropagation(); startDrag(e, "wp", link.id, { wpIdx: i }); }}
+                    onContextMenu={e => { e.preventDefault(); e.stopPropagation(); delWaypoint(link.id, i); }} />
+                </g>
+              ))}
+              {/* Hint when selected */}
+              {isSel && wps.length === 0 && <text x={mx} y={my - 10} textAnchor="middle"
+                fill="#ffab00" fontSize={5} fontFamily={FN} pointerEvents="none">2×клик — добавить точку</text>}
             </g>);
           })}
 
