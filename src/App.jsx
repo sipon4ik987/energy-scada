@@ -211,6 +211,73 @@ function getPortPos(p, d) {
   return null;
 }
 
+// ═══ ORTHOGONAL ROUTING ═══
+function portDir(p, d) {
+  // Returns exit direction: "d"=down, "u"=up, "l"=left, "r"=right
+  if (p.block === "cell") return "d";  // cells exit downward
+  if (p.block === "bus") return "d";   // bus feeders exit downward
+  if (p.block === "krun") return "d";  // krun sections exit downward
+  if (p.block === "lr") return p.port === "a" ? "l" : "r"; // LR: A=left, B=right
+  if (p.block === "tp") {
+    const tp = d.tps.find(t => t.id === p.id);
+    if (tp?.type === "2bktp") {
+      if (p.port.endsWith("_1")) return "l";  // left side ports
+      if (p.port.endsWith("_2")) return "r";  // right side ports
+    }
+    if (p.port === "in1" || p.port === "in2") return "l";
+    if (p.port === "out1") return "r";
+    if (p.port === "tr") return "d";
+  }
+  return "d";
+}
+const STUB = 20; // length of initial stub exiting port
+function orthoPath(x1, y1, dir1, x2, y2, dir2) {
+  // Build orthogonal path between two ports with given exit directions
+  // Start with stub from port 1
+  const pts = [[x1, y1]];
+  let sx1 = x1, sy1 = y1, sx2 = x2, sy2 = y2;
+  if (dir1 === "d") sy1 += STUB;
+  else if (dir1 === "u") sy1 -= STUB;
+  else if (dir1 === "l") sx1 -= STUB;
+  else if (dir1 === "r") sx1 += STUB;
+  pts.push([sx1, sy1]);
+  // End stub from port 2
+  let ex2 = x2, ey2 = y2;
+  if (dir2 === "d") ey2 += STUB;
+  else if (dir2 === "u") ey2 -= STUB;
+  else if (dir2 === "l") ex2 -= STUB;
+  else if (dir2 === "r") ex2 += STUB;
+  // Route from stub1 end to stub2 end with at most 2 bends
+  const midPts = routeOrtho(sx1, sy1, dir1, ex2, ey2, dir2);
+  pts.push(...midPts);
+  pts.push([ex2, ey2]);
+  pts.push([x2, y2]);
+  // Build SVG path
+  return pts.map((p, i) => `${i === 0 ? "M" : "L"}${p[0]},${p[1]}`).join(" ");
+}
+function routeOrtho(x1, y1, d1, x2, y2, d2) {
+  // Returns intermediate points for orthogonal routing between stub endpoints
+  const isVert1 = d1 === "d" || d1 === "u";
+  const isVert2 = d2 === "d" || d2 === "u";
+  if (isVert1 && isVert2) {
+    // Both vertical stubs → horizontal middle segment
+    const midY = (y1 + y2) / 2;
+    return [[x1, midY], [x2, midY]];
+  }
+  if (!isVert1 && !isVert2) {
+    // Both horizontal stubs → vertical middle segment
+    const midX = (x1 + x2) / 2;
+    return [[midX, y1], [midX, y2]];
+  }
+  // One vertical, one horizontal → single bend
+  if (isVert1) {
+    // port1 exits vertically, port2 exits horizontally → bend at (x1, y2) or (x2, y1)
+    return [[x1, y2]];
+  }
+  // port1 exits horizontally, port2 exits vertically
+  return [[x2, y1]];
+}
+
 // ═══ MAIN ═══
 export default function App() {
   const [d, setD] = useState(() => {
@@ -703,17 +770,21 @@ export default function App() {
             );
           })()}
 
-          {/* Cables (behind blocks) */}
+          {/* Cables — orthogonal routing */}
           {d.links.map(link => {
             const fp = getPortPos(link.from, d); const tp = getPortPos(link.to, d);
             if (!fp || !tp) return null;
             const fOn = portEnergized(link.from, d); const tOn = portEnergized(link.to, d);
-            const on = fOn && tOn; const mx = (fp.x + tp.x) / 2, my = (fp.y + tp.y) / 2;
+            const on = fOn && tOn;
+            const d1 = portDir(link.from, d), d2 = portDir(link.to, d);
+            const pathD = orthoPath(fp.x, fp.y, d1, tp.x, tp.y, d2);
+            const mx = (fp.x + tp.x) / 2, my = (fp.y + tp.y) / 2;
             return (<g key={link.id}>
-              <line x1={fp.x} y1={fp.y} x2={tp.x} y2={tp.y} stroke={on ? WC : WO} strokeWidth={on ? 1.8 : .8}
+              <path d={pathD} fill="none" stroke={on ? WC : WO} strokeWidth={on ? 1.8 : .8}
+                strokeLinejoin="round" strokeLinecap="round"
                 style={on ? { filter: `drop-shadow(0 0 2px ${WC}40)` } : {}} />
               {link.cable && <text x={mx} y={my - 4} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>{link.cable}</text>}
-              {/* Delete X on hover — always show small */}
+              {/* Delete X */}
               <g onClick={e => { e.stopPropagation(); delLink(link.id); }} style={{ cursor: "pointer" }}>
                 <circle cx={mx} cy={my} r={4} fill="#2a1010" stroke="#4a2020" strokeWidth={.5} opacity={.6} />
                 <text x={mx} y={my + 2.5} textAnchor="middle" fill={OFF} fontSize={6} fontFamily={FN}>✕</text>
