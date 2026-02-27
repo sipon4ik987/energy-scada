@@ -44,7 +44,7 @@ const saveState = (d) => {
 
 const INIT = {
   buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" },
-    { id: "bus-rp", name: "РП-25", x: 100, y: 510, inputOn: true,
+    { id: "bus-rp", name: "РП-25", x: 500, y: 510, inputOn: true,
       feeders: [{ id: "f11", name: "Ф-11", closed: true }, { id: "f8", name: "Ф-8", closed: true }] }],
   inputBreakers: [
     { id: "ib1", feedName: "Луч 1 (ПС-677)", busId: "bus-1", closed: true },
@@ -188,7 +188,7 @@ function getPortPos(p, d) {
     return p.port === "a" ? { x: lr.x, y: lr.y + 14 } : { x: lr.x + 50, y: lr.y + 14 };
   }
   if (p.block === "cell") {
-    const BX = 100;
+    const BX = 500;
     const cell = d.cells.find(c => c.id === p.id); if (!cell) return null;
     const s1cells = d.cells.filter(c => c.busId === "bus-1");
     const s1w = Math.max(s1cells.length * 70 + 10, 100);
@@ -201,7 +201,7 @@ function getPortPos(p, d) {
   if (p.block === "bus") {
     const bus = d.buses.find(b => b.id === p.id);
     if (bus?.feeders && p.port) {
-      const rx = bus.x ?? 100, ry = bus.y ?? 510;
+      const rx = bus.x ?? 500, ry = bus.y ?? 510;
       const fIdx = bus.feeders.findIndex(f => f.id === p.port);
       if (fIdx >= 0) return { x: rx + 50 + fIdx * 100, y: ry + 30 };
     }
@@ -431,6 +431,15 @@ export default function App() {
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [onWheel]);
+
+  // Auto-fit on first render
+  const didFit = useRef(false);
+  useEffect(() => {
+    if (!didFit.current && containerRef.current) {
+      didFit.current = true;
+      setTimeout(fitAll, 50);
+    }
+  });
   
   useEffect(() => {
     if (panning) {
@@ -455,7 +464,7 @@ export default function App() {
     const rpBus = d.buses.find(b => b.id === "bus-rp");
     if (rpBus?.x != null) { minX = Math.min(minX, rpBus.x - 10); minY = Math.min(minY, rpBus.y - 50); maxX = Math.max(maxX, rpBus.x + 210); maxY = Math.max(maxY, rpBus.y + 40); }
     // Include ПС-677 + РП-34 bus area (BX=100 base offset)
-    const BX_fit = 100;
+    const BX_fit = 500;
     const s1cells_fit = d.cells.filter(c => c.busId === "bus-1").length;
     const s1w_fit = Math.max(s1cells_fit * 70 + 10, 100);
     const s2start_fit = BX_fit + 10 + s1w_fit + 40;
@@ -567,7 +576,7 @@ export default function App() {
 
           {/* ПС-677 + РП-34 (Секции I, II) */}
           {(() => {
-            const BX = 100; // base X offset
+            const BX = 500; // base X offset
             const s1cells = d.cells.filter(c => c.busId === "bus-1").length;
             const s1w = Math.max(s1cells * 70 + 10, 100);
             const s2start = BX + 10 + s1w + 40;
@@ -625,7 +634,7 @@ export default function App() {
           {(() => {
             const rpBus = d.buses.find(b => b.id === "bus-rp");
             if (!rpBus || !rpBus.feeders) return null;
-            const rpX = rpBus.x ?? 100, rpY = rpBus.y ?? 510, rpW = 200;
+            const rpX = rpBus.x ?? 500, rpY = rpBus.y ?? 510, rpW = 200;
             const rpOn = busOn("bus-rp", d);
             return (
               <g onMouseDown={e => startDrag(e, "rp", "bus-rp")} style={{ cursor: drag ? "grabbing" : "grab" }}>
@@ -679,7 +688,7 @@ export default function App() {
 
           {/* Cells */}
           {d.cells.map((cell) => {
-            const BX = 100;
+            const BX = 500;
             const s1cells = d.cells.filter(c => c.busId === "bus-1");
             const s1w = Math.max(s1cells.length * 70 + 10, 100);
             const s2start = BX + 10 + s1w + 40;
