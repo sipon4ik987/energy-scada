@@ -43,12 +43,12 @@ const saveState = (d) => {
 };
 
 const INIT = {
-  buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" }, { id: "bus-rp", name: "РП-25", x: 100, y: 510 }],
+  buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" },
+    { id: "bus-rp", name: "РП-25", x: 100, y: 510, inputOn: true,
+      feeders: [{ id: "f11", name: "Ф-11", closed: true }, { id: "f8", name: "Ф-8", closed: true }] }],
   inputBreakers: [
     { id: "ib1", feedName: "Ф-213", busId: "bus-1", closed: true },
     { id: "ib2", feedName: "Ф-313", busId: "bus-2", closed: true },
-    { id: "ib3", feedName: "Ф-11", busId: "bus-rp", closed: true },
-    { id: "ib4", feedName: "Ф-8", busId: "bus-rp", closed: true },
   ],
   sectionBreakers: [{ id: "sv1", fromBus: "bus-1", toBus: "bus-2", closed: false, name: "СВ яч.5-6" }],
   cells: [
@@ -119,17 +119,20 @@ const INIT = {
     { id: "l20", from: { block: "tp", id: "tp-1913", port: "out1" }, to: { block: "tp", id: "tp-1912-1", port: "in1" }, cable: "" },
     { id: "l21", from: { block: "cell", id: "c10", port: "out" }, to: { block: "krun", id: "kr76", port: "s1" }, cable: "АСБЛ 3×240" },
     { id: "l22", from: { block: "krun", id: "kr76", port: "s2" }, to: { block: "tp", id: "tp-1916", port: "in1" }, cable: "" },
-    { id: "l23", from: { block: "bus", id: "bus-rp", port: "out" }, to: { block: "lr", id: "lr-8.1", port: "a" }, cable: "" },
+    { id: "l23", from: { block: "bus", id: "bus-rp", port: "f11" }, to: { block: "lr", id: "lr-8.1", port: "a" }, cable: "" },
     { id: "l24", from: { block: "lr", id: "lr-8.1", port: "b" }, to: { block: "tp", id: "tp-3504-1", port: "in1" }, cable: "" },
     { id: "l25", from: { block: "tp", id: "tp-3504-1", port: "out1" }, to: { block: "tp", id: "tp-3504-2", port: "in1" }, cable: "" },
-    { id: "l26", from: { block: "tp", id: "tp-3504-2", port: "out1" }, to: { block: "tp", id: "tp-3505-1", port: "in1" }, cable: "" },
-    { id: "l27", from: { block: "tp", id: "tp-3505-1", port: "out1" }, to: { block: "tp", id: "tp-3505-2", port: "in1" }, cable: "" },
+    { id: "l26", from: { block: "bus", id: "bus-rp", port: "f8" }, to: { block: "lr", id: "lr-8.2", port: "a" }, cable: "" },
+    { id: "l27", from: { block: "lr", id: "lr-8.2", port: "b" }, to: { block: "tp", id: "tp-3505-1", port: "in1" }, cable: "" },
+    { id: "l28", from: { block: "tp", id: "tp-3505-1", port: "out1" }, to: { block: "tp", id: "tp-3505-2", port: "in1" }, cable: "" },
   ],
   switchLog: [],
 };
 
 // ═══ ENERGY ═══
 function busOn(bId, d) {
+  const bus = d.buses.find(b => b.id === bId);
+  if (bus?.inputOn) return true;
   const v = new Set(); const c = id => { if (v.has(id)) return false; v.add(id);
     if (d.inputBreakers.some(b => b.busId === id && b.closed)) return true;
     for (const s of d.sectionBreakers) if (s.closed) { if (s.fromBus === id && c(s.toBus)) return true; if (s.toBus === id && c(s.fromBus)) return true; }
@@ -137,7 +140,7 @@ function busOn(bId, d) {
 }
 function pKey(p) {
   if (p.block === "cell") return `cell:${p.id}`;
-  if (p.block === "bus") return `bus:${p.id}`;
+  if (p.block === "bus") return p.port ? `bus-${p.port}:${p.id}` : `bus:${p.id}`;
   if (p.block === "lr") return `lr:${p.id}`;
   if (p.block === "krun") return `ks:${p.id}-${p.port}`;
   if (p.block === "tp") return `tp-${p.port}:${p.id}`;
@@ -168,12 +171,19 @@ function tryEnter(portRef, d, queue) {
       else if (p.port === "in2" && tp?.sw.in2) { queue.push(pk); if (tp.sw.in1) queue.push(`tp-in1:${tp.id}`); if (tp.sw.out1) queue.push(`tp-out1:${tp.id}`); }
       else if (p.port === "out1" && tp?.sw.out1) { queue.push(pk); if (tp.sw.in1) queue.push(`tp-in1:${tp.id}`); if (tp.sw.in2) queue.push(`tp-in2:${tp.id}`); }
     }
+  } else if (p.block === "bus" && p.port) {
+    const bus = d.buses.find(b => b.id === p.id);
+    const feeder = bus?.feeders?.find(f => f.id === p.port);
+    if (feeder?.closed && busOn(p.id, d)) queue.push(pk);
   } else queue.push(pk);
 }
 function isEnergized(pk, d) {
   const visited = new Set(); const queue = [];
   d.cells.forEach(c => { if (c.closed && c.type !== "reserve" && busOn(c.busId, d)) queue.push(`cell:${c.id}`); });
-  d.buses.forEach(b => { if (busOn(b.id, d)) queue.push(`bus:${b.id}`); });
+  d.buses.forEach(b => { if (busOn(b.id, d)) {
+    queue.push(`bus:${b.id}`);
+    if (b.feeders) b.feeders.forEach(f => { if (f.closed) queue.push(`bus-${f.id}:${b.id}`); });
+  }});
   while (queue.length > 0) {
     const cur = queue.shift(); if (visited.has(cur)) continue; visited.add(cur);
     if (cur === pk) return true;
@@ -191,6 +201,12 @@ function isEnergized(pk, d) {
       if (tp?.sw.in2) { if (tp.sw.in1) queue.push(`tp-in1:${tpId}`); if (tp.sw.out1) queue.push(`tp-out1:${tpId}`); } }
     if (cur.startsWith("tp-out1:")) { const tpId = cur.slice(8); const tp = d.tps.find(t => t.id === tpId);
       if (tp?.sw.out1) { if (tp.sw.in1) queue.push(`tp-in1:${tpId}`); if (tp.sw.in2) queue.push(`tp-in2:${tpId}`); } }
+    // Bus → feeder internal propagation
+    if (cur.startsWith("bus:")) {
+      const busId = cur.slice(4);
+      const bus = d.buses.find(b => b.id === busId);
+      if (bus?.feeders) bus.feeders.forEach(f => { if (f.closed) queue.push(`bus-${f.id}:${busId}`); });
+    }
     // 2БКТП internal propagation
     const m2b = cur.match(/^tp-((?:in1|in2|out1)_[12]):(.+)$/);
     if (m2b) {
@@ -241,10 +257,11 @@ function getPortPos(p, d) {
     return { x: 50 + idx * 70 + 15, y: 105 };
   }
   if (p.block === "bus") {
-    if (p.id === "bus-rp") {
-      const rpBus = d.buses.find(b => b.id === "bus-rp");
-      const rx = rpBus?.x ?? 100, ry = rpBus?.y ?? 510;
-      return { x: rx + 100, y: ry + 26 }; // center output port
+    const bus = d.buses.find(b => b.id === p.id);
+    if (bus?.feeders && p.port) {
+      const rx = bus.x ?? 100, ry = bus.y ?? 510;
+      const fIdx = bus.feeders.findIndex(f => f.id === p.port);
+      if (fIdx >= 0) return { x: rx + 50 + fIdx * 100, y: ry + 30 };
     }
     return { x: 780, y: 105 };
   }
@@ -277,6 +294,8 @@ export default function App() {
   const togKS = (krId, sId) => setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === krId ? { ...k, sections: k.sections.map(s => { if (s.id === sId) { log(`${k.name}/${s.name}: ${s.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...s, closed: !s.closed }; } return s; }) } : k) }));
   const togTP = (tpId, key) => setD(p => { const tp = p.tps.find(t => t.id === tpId); log(`${tp.name} ${key}: ${tp.sw[key] ? "ОТКЛ" : "ВКЛ"}`); return { ...p, tps: p.tps.map(t => t.id === tpId ? { ...t, sw: { ...t.sw, [key]: !t.sw[key] } } : t) }; });
   const togTPsv = (tpId, key) => setD(p => { const tp = p.tps.find(t => t.id === tpId); log(`${tp.name} ${key}: ${tp[key] ? "ОТКЛ" : "ВКЛ"}`); return { ...p, tps: p.tps.map(t => t.id === tpId ? { ...t, [key]: !t[key] } : t) }; });
+  const togRPinput = busId => setD(p => ({ ...p, buses: p.buses.map(b => b.id === busId ? { ...b, inputOn: !b.inputOn } : b) }));
+  const togRPfeeder = (busId, fId) => setD(p => ({ ...p, buses: p.buses.map(b => b.id === busId ? { ...b, feeders: b.feeders.map(f => f.id === fId ? { ...f, closed: !f.closed } : f) } : b) }));
 
   // Port click for connecting
   const onPortClick = (portRef) => {
@@ -610,42 +629,40 @@ export default function App() {
             </>;
           })()}
 
-          {/* РП-25 — отдельный блок с двумя независимыми вводами */}
+          {/* РП-25 — отдельный блок с фидерами-выходами */}
           {(() => {
             const rpBus = d.buses.find(b => b.id === "bus-rp");
-            if (!rpBus) return null;
+            if (!rpBus || !rpBus.feeders) return null;
             const rpX = rpBus.x ?? 100, rpY = rpBus.y ?? 510, rpW = 200;
-            const rpIBs = d.inputBreakers.filter(ib => ib.busId === "bus-rp");
             const rpOn = busOn("bus-rp", d);
             return (
               <g onMouseDown={e => startDrag(e, "rp", "bus-rp")} style={{ cursor: drag ? "grabbing" : "grab" }}>
                 {/* Background */}
-                <rect x={rpX - 10} y={rpY - 45} width={rpW + 20} height={85} rx={6}
+                <rect x={rpX - 10} y={rpY - 30} width={rpW + 20} height={75} rx={6}
                   fill={rpOn ? "#0a1f1f" : "#151515"} stroke={rpOn ? WC + "80" : "#3a4a50"} strokeWidth={1.5} />
                 {/* Title */}
-                <text x={rpX + rpW / 2} y={rpY - 50} textAnchor="middle" fill={rpOn ? WC : TD}
+                <text x={rpX + rpW / 2} y={rpY - 35} textAnchor="middle" fill={rpOn ? WC : TD}
                   fontSize={10} fontWeight="bold" fontFamily={FN}>РП-25</text>
+                {/* Input switch */}
+                <Sw x={rpX + rpW / 2} y={rpY - 16} on={rpBus.inputOn} onClick={() => togRPinput("bus-rp")} sz={11} />
+                <text x={rpX + rpW / 2 + 12} y={rpY - 13} fill={rpBus.inputOn ? WC : TM} fontSize={5} fontFamily={FN}>ввод</text>
+                <line x1={rpX + rpW / 2} y1={rpY - 10} x2={rpX + rpW / 2} y2={rpY} stroke={rpOn ? WC : WO} strokeWidth={1.5} />
                 {/* Bus bar */}
                 <rect x={rpX} y={rpY} width={rpW} height={4} rx={1} fill={rpOn ? WC : WO}
                   style={rpOn ? { filter: `drop-shadow(0 0 4px ${WC}40)` } : {}} />
-                {/* Input feeders */}
-                {rpIBs.map((ib, i) => {
+                {/* Feeder outputs */}
+                {rpBus.feeders.map((f, i) => {
                   const fx = rpX + 50 + i * 100;
-                  const ibOn = ib.closed && rpOn;
+                  const fOn = rpOn && f.closed;
                   return (
-                    <g key={ib.id}>
-                      <text x={fx} y={rpY - 32} textAnchor="middle" fill={ib.closed ? WC : TD} fontSize={7} fontWeight="bold" fontFamily={FN}>{ib.feedName}</text>
-                      <line x1={fx} y1={rpY - 26} x2={fx} y2={rpY - 14} stroke={ib.closed ? WC : WO} strokeWidth={1.5} />
-                      <Sw x={fx} y={rpY - 8} on={ib.closed} onClick={() => togIB(ib.id)} sz={11} />
-                      <line x1={fx} y1={rpY - 2} x2={fx} y2={rpY} stroke={ib.closed ? WC : WO} strokeWidth={1.5} />
-                      <text x={fx} y={rpY + 16} textAnchor="middle" fill={ibOn ? WC : TM} fontSize={5} fontFamily={FN}>
-                        {ib.feedName === "Ф-11" ? "Ввод I" : "Ввод II"}</text>
+                    <g key={f.id}>
+                      <line x1={fx} y1={rpY + 4} x2={fx} y2={rpY + 12} stroke={rpOn ? WC : WO} strokeWidth={1.5} />
+                      <Sw x={fx} y={rpY + 18} on={f.closed} onClick={() => togRPfeeder("bus-rp", f.id)} sz={11} />
+                      <line x1={fx} y1={rpY + 24} x2={fx} y2={rpY + 30} stroke={fOn ? WC : WO} strokeWidth={1.5} />
+                      <Port x={fx} y={rpY + 30} on={fOn} label={f.name} portRef={{ block: "bus", id: "bus-rp", port: f.id }} />
                     </g>
                   );
                 })}
-                {/* Output port */}
-                <line x1={rpX + rpW / 2} y1={rpY + 4} x2={rpX + rpW / 2} y2={rpY + 22} stroke={rpOn ? WC : WO} strokeWidth={1.5} />
-                <Port x={rpX + rpW / 2} y={rpY + 26} on={rpOn} label="вых" portRef={{ block: "bus", id: "bus-rp", port: "out" }} />
               </g>
             );
           })()}
