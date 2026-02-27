@@ -43,8 +43,9 @@ const saveState = (d) => {
 };
 
 const INIT = {
+  psBlock: { x: 200, y: 10 },
   buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" },
-    { id: "bus-rp", name: "РП-25", x: 500, y: 510, inputOn: true,
+    { id: "bus-rp", name: "РП-25", x: 200, y: 300, inputOn: true,
       feeders: [{ id: "f11", name: "Ф-11", closed: true }, { id: "f8", name: "Ф-8", closed: true }] }],
   inputBreakers: [
     { id: "ib1", feedName: "Луч 1 (ПС-677)", busId: "bus-1", closed: true },
@@ -188,15 +189,15 @@ function getPortPos(p, d) {
     return p.port === "a" ? { x: lr.x, y: lr.y + 14 } : { x: lr.x + 50, y: lr.y + 14 };
   }
   if (p.block === "cell") {
-    const BX = 500;
+    const px = d.psBlock?.x || 200, py = d.psBlock?.y || 10;
     const cell = d.cells.find(c => c.id === p.id); if (!cell) return null;
     const s1cells = d.cells.filter(c => c.busId === "bus-1");
     const s1w = Math.max(s1cells.length * 70 + 10, 100);
-    const s2start = BX + 10 + s1w + 40;
+    const s2start = px + 10 + s1w + 40;
     const isS1 = cell.busId === "bus-1";
     const idxInBus = d.cells.filter(c => c.busId === cell.busId).indexOf(cell);
-    const cx = isS1 ? BX + 10 + idxInBus * 70 : s2start + idxInBus * 70;
-    return { x: cx + 15, y: 110 };
+    const cx = isS1 ? px + 10 + idxInBus * 70 : s2start + idxInBus * 70;
+    return { x: cx + 15, y: py + 106 };
   }
   if (p.block === "bus") {
     const bus = d.buses.find(b => b.id === p.id);
@@ -368,6 +369,7 @@ export default function App() {
     else if (drag.type === "krun") setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === drag.id ? { ...k, x: k.x + dx, y: k.y + dy } : k) }));
     else if (drag.type === "lr") setD(p => ({ ...p, lrs: p.lrs.map(l => l.id === drag.id ? { ...l, x: l.x + dx, y: l.y + dy } : l) }));
     else if (drag.type === "rp") setD(p => ({ ...p, buses: p.buses.map(b => b.id === drag.id ? { ...b, x: (b.x || 0) + dx, y: (b.y || 0) + dy } : b) }));
+    else if (drag.type === "ps") setD(p => ({ ...p, psBlock: { x: (p.psBlock?.x || 200) + dx, y: (p.psBlock?.y || 10) + dy } }));
     setDrag(pr => ({ ...pr, sx: sp.x, sy: sp.y })); }, [drag]);
   const onMU = useCallback(() => setDrag(null), []);
   useEffect(() => { window.addEventListener("mousemove", onMM); window.addEventListener("mouseup", onMU);
@@ -463,16 +465,16 @@ export default function App() {
     // Include RP-25 block
     const rpBus = d.buses.find(b => b.id === "bus-rp");
     if (rpBus?.x != null) { minX = Math.min(minX, rpBus.x - 10); minY = Math.min(minY, rpBus.y - 50); maxX = Math.max(maxX, rpBus.x + 210); maxY = Math.max(maxY, rpBus.y + 40); }
-    // Include ПС-677 + РП-34 bus area (BX=100 base offset)
-    const BX_fit = 500;
+    // Include ПС-677 + РП-34 block
+    const px = d.psBlock?.x || 200, py = d.psBlock?.y || 10;
     const s1cells_fit = d.cells.filter(c => c.busId === "bus-1").length;
     const s1w_fit = Math.max(s1cells_fit * 70 + 10, 100);
-    const s2start_fit = BX_fit + 10 + s1w_fit + 40;
+    const s2start_fit = px + 10 + s1w_fit + 40;
     const s2cells_fit = d.cells.filter(c => c.busId === "bus-2").length;
     const s2w_fit = Math.max(s2cells_fit * 70 + 10, 100);
     const totalW_fit = s2start_fit + s2w_fit;
-    minX = Math.min(minX, BX_fit - 10); minY = Math.min(minY, 0);
-    maxX = Math.max(maxX, totalW_fit + 20);
+    minX = Math.min(minX, px - 20); minY = Math.min(minY, py - 10);
+    maxX = Math.max(maxX, totalW_fit + 20); maxY = Math.max(maxY, py + 120);
     if (minX === Infinity) return resetView();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return resetView();
@@ -574,60 +576,93 @@ export default function App() {
           <defs><pattern id="g" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0L0 0 0 30" fill="none" stroke="#162030" strokeWidth="0.3" /></pattern></defs>
           <rect width={CANVAS_W} height={CANVAS_H} fill="url(#g)" />
 
-          {/* ПС-677 + РП-34 (Секции I, II) */}
+          {/* ПС-677 + РП-34 — draggable block */}
           {(() => {
-            const BX = 500; // base X offset
+            const px = d.psBlock?.x || 200, py = d.psBlock?.y || 10;
             const s1cells = d.cells.filter(c => c.busId === "bus-1").length;
             const s1w = Math.max(s1cells * 70 + 10, 100);
-            const s2start = BX + 10 + s1w + 40;
+            const s2start = px + 10 + s1w + 40;
             const s2cells = d.cells.filter(c => c.busId === "bus-2").length;
             const s2w = Math.max(s2cells * 70 + 10, 100);
             const totalW = s2start + s2w;
-            const centerX = (BX + totalW) / 2;
+            const centerX = (px + totalW) / 2;
             const ib1 = d.inputBreakers.find(b => b.busId === "bus-1");
             const ib2 = d.inputBreakers.find(b => b.busId === "bus-2");
-            const ib1x = BX + s1w / 2, ib2x = s2start + s2w / 2;
-            return <>
+            const ib1x = px + s1w / 2, ib2x = s2start + s2w / 2;
+            // Block bounding box for border
+            const bx1 = px - 10, by1 = py - 8;
+            const bx2 = totalW + 10, by2 = py + 110;
+            const bW = bx2 - bx1, bH = by2 - by1;
+            return <g onMouseDown={e => startDrag(e, "ps", null)} style={{ cursor: drag?.type === "ps" ? "grabbing" : "grab" }}>
+              {/* Work zone border */}
+              <rect x={bx1} y={by1} width={bW} height={bH} rx={8}
+                fill="none" stroke="#263238" strokeWidth={1} strokeDasharray="6 3" />
+              <text x={bx1 + 6} y={by1 - 3} fill={TM} fontSize={6} fontFamily={FN}>РП-34</text>
+
               {/* ПС-677 block */}
-              <rect x={centerX - 50} y={4} width={100} height={22} rx={5}
+              <rect x={centerX - 50} y={py} width={100} height={22} rx={5}
                 fill="#1a1a08" stroke={BUS + "60"} strokeWidth={1.2} />
-              <text x={centerX} y={19} textAnchor="middle" fill={BUS}
+              <text x={centerX} y={py + 15} textAnchor="middle" fill={BUS}
                 fontSize={9} fontWeight="bold" fontFamily={FN}>ПС-677</text>
 
               {/* Луч 1 → Секция I */}
-              <line x1={centerX - 20} y1={26} x2={ib1x} y2={38} stroke={ib1?.closed && s1 ? BUS : BUSOFF} strokeWidth={1.5} />
-              <text x={ib1x} y={36} textAnchor="middle" fill={ib1?.closed ? BUS : TD} fontSize={5} fontFamily={FN}>Луч 1</text>
-              <Sw x={ib1x} y={50} on={ib1?.closed} onClick={() => ib1 && togIB(ib1.id)} sz={11} />
-              <line x1={ib1x} y1={56} x2={ib1x} y2={65} stroke={s1 ? BUS : BUSOFF} strokeWidth={1.5} />
+              <line x1={centerX - 20} y1={py + 22} x2={ib1x} y2={py + 34} stroke={ib1?.closed && s1 ? BUS : BUSOFF} strokeWidth={1.5} />
+              <text x={ib1x} y={py + 32} textAnchor="middle" fill={ib1?.closed ? BUS : TD} fontSize={5} fontFamily={FN}>Луч 1</text>
+              <Sw x={ib1x} y={py + 46} on={ib1?.closed} onClick={() => ib1 && togIB(ib1.id)} sz={11} />
+              <line x1={ib1x} y1={py + 52} x2={ib1x} y2={py + 61} stroke={s1 ? BUS : BUSOFF} strokeWidth={1.5} />
 
               {/* Луч 2 → Секция II */}
-              <line x1={centerX + 20} y1={26} x2={ib2x} y2={38} stroke={ib2?.closed && s2 ? BUS : BUSOFF} strokeWidth={1.5} />
-              <text x={ib2x} y={36} textAnchor="middle" fill={ib2?.closed ? BUS : TD} fontSize={5} fontFamily={FN}>Луч 2</text>
-              <Sw x={ib2x} y={50} on={ib2?.closed} onClick={() => ib2 && togIB(ib2.id)} sz={11} />
-              <line x1={ib2x} y1={56} x2={ib2x} y2={65} stroke={s2 ? BUS : BUSOFF} strokeWidth={1.5} />
+              <line x1={centerX + 20} y1={py + 22} x2={ib2x} y2={py + 34} stroke={ib2?.closed && s2 ? BUS : BUSOFF} strokeWidth={1.5} />
+              <text x={ib2x} y={py + 32} textAnchor="middle" fill={ib2?.closed ? BUS : TD} fontSize={5} fontFamily={FN}>Луч 2</text>
+              <Sw x={ib2x} y={py + 46} on={ib2?.closed} onClick={() => ib2 && togIB(ib2.id)} sz={11} />
+              <line x1={ib2x} y1={py + 52} x2={ib2x} y2={py + 61} stroke={s2 ? BUS : BUSOFF} strokeWidth={1.5} />
 
               {/* РП-34 title */}
-              <text x={centerX} y={60} textAnchor="middle" fill={s1 || s2 ? "#4fc3f7" : TD}
+              <text x={centerX} y={py + 56} textAnchor="middle" fill={s1 || s2 ? "#4fc3f7" : TD}
                 fontSize={7} fontFamily={FN}>РП-34</text>
 
               {/* Секция I bus */}
-              <rect x={BX} y={65} width={s1w} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
-              <text x={BX + s1w / 2} y={75} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция I</text>
+              <rect x={px} y={py + 61} width={s1w} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
+              <text x={px + s1w / 2} y={py + 71} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция I</text>
 
               {/* Секционник */}
               {(() => {
                 const sv = d.sectionBreakers[0];
-                const svX = BX + s1w + 10;
+                const svX = px + s1w + 10;
                 return <g>
-                  <rect x={svX} y={65} width={20} height={4} rx={1} fill={sv?.closed ? BUS : BUSOFF} />
-                  <Sw x={svX + 10} y={67} on={sv?.closed} onClick={() => sv && togSB(sv.id)} sz={9} />
+                  <rect x={svX} y={py + 61} width={20} height={4} rx={1} fill={sv?.closed ? BUS : BUSOFF} />
+                  <Sw x={svX + 10} y={py + 63} on={sv?.closed} onClick={() => sv && togSB(sv.id)} sz={9} />
                 </g>;
               })()}
 
               {/* Секция II bus */}
-              <rect x={s2start} y={65} width={s2w} height={4} rx={1} fill={s2 ? BUS : BUSOFF} />
-              <text x={s2start + s2w / 2} y={75} textAnchor="middle" fill={s2 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция II</text>
-            </>;
+              <rect x={s2start} y={py + 61} width={s2w} height={4} rx={1} fill={s2 ? BUS : BUSOFF} />
+              <text x={s2start + s2w / 2} y={py + 71} textAnchor="middle" fill={s2 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция II</text>
+
+              {/* Cells inside this block */}
+              {d.cells.map((cell) => {
+                const isS1 = cell.busId === "bus-1";
+                const idxInBus = d.cells.filter(c => c.busId === cell.busId).indexOf(cell);
+                const cx = isS1 ? px + 10 + idxInBus * 70 : s2start + idxInBus * 70;
+                const cy = py + 76;
+                const bOn = busOn(cell.busId, d); const on = bOn && cell.closed;
+                const isRes = cell.type === "reserve";
+                return (<g key={cell.id}>
+                  <rect x={cx} y={cy} width={30} height={26} rx={3}
+                    fill={isRes ? "#141020" : on ? "#0d1f12" : "#1a1212"}
+                    stroke={isRes ? "#7c4dff30" : on ? BUS + "40" : "#26323850"} strokeWidth={1} opacity={isRes ? .5 : 1} />
+                  <text x={cx + 15} y={cy - 3} textAnchor="middle" fill={isRes ? "#7c4dff" : on ? BUS : TD}
+                    fontSize={7} fontWeight="bold" fontFamily={FN} style={{ cursor: "pointer" }}
+                    onClick={e => { e.stopPropagation(); editCell(cell); }}>Яч.{cell.num}</text>
+                  {!isRes && <Sw x={cx + 15} y={cy + 13} on={cell.closed} onClick={() => togCell(cell.id)} sz={10} />}
+                  {isRes && <text x={cx + 15} y={cy + 15} textAnchor="middle" fill="#7c4dff" fontSize={6} fontFamily={FN}>рез</text>}
+                  {!isRes && <>
+                    <line x1={cx + 15} y1={cy + 20} x2={cx + 15} y2={cy + 30} stroke={on ? BUS : WO} strokeWidth={1.5} />
+                    <Port x={cx + 15} y={cy + 30} on={on} label="" portRef={{ block: "cell", id: cell.id, port: "out" }} />
+                  </>}
+                </g>);
+              })}
+            </g>;
           })()}
 
           {/* РП-25 — отдельный блок с фидерами-выходами */}
@@ -686,33 +721,9 @@ export default function App() {
             </g>);
           })}
 
-          {/* Cells */}
-          {d.cells.map((cell) => {
-            const BX = 500;
-            const s1cells = d.cells.filter(c => c.busId === "bus-1");
-            const s1w = Math.max(s1cells.length * 70 + 10, 100);
-            const s2start = BX + 10 + s1w + 40;
-            const isS1 = cell.busId === "bus-1";
-            const idxInBus = d.cells.filter(c => c.busId === cell.busId).indexOf(cell);
-            const cx = isS1 ? BX + 10 + idxInBus * 70 : s2start + idxInBus * 70;
-            const cy = 80;
-            const bOn = busOn(cell.busId, d); const on = bOn && cell.closed;
-            const isRes = cell.type === "reserve";
-            return (<g key={cell.id}>
-              <rect x={cx} y={cy} width={30} height={26} rx={3}
-                fill={isRes ? "#141020" : on ? "#0d1f12" : "#1a1212"}
-                stroke={isRes ? "#7c4dff30" : on ? BUS + "40" : "#26323850"} strokeWidth={1} opacity={isRes ? .5 : 1} />
-              <text x={cx + 15} y={cy - 3} textAnchor="middle" fill={isRes ? "#7c4dff" : on ? BUS : TD}
-                fontSize={7} fontWeight="bold" fontFamily={FN} style={{ cursor: "pointer" }}
-                onClick={e => { e.stopPropagation(); editCell(cell); }}>Яч.{cell.num}</text>
-              {!isRes && <Sw x={cx + 15} y={cy + 13} on={cell.closed} onClick={() => togCell(cell.id)} sz={10} />}
-              {isRes && <text x={cx + 15} y={cy + 15} textAnchor="middle" fill="#7c4dff" fontSize={6} fontFamily={FN}>рез</text>}
-              {!isRes && <>
-                <line x1={cx + 15} y1={cy + 20} x2={cx + 15} y2={cy + 30} stroke={on ? BUS : WO} strokeWidth={1.5} />
-                <Port x={cx + 15} y={cy + 30} on={on} label="" portRef={{ block: "cell", id: cell.id, port: "out" }} />
-              </>}
-            </g>);
-          })}
+          {/* Work zone border for entire canvas */}
+          <rect x={20} y={20} width={CANVAS_W - 40} height={CANVAS_H - 40}
+            fill="none" stroke="#1a2332" strokeWidth={2} rx={12} />
 
           {/* LRs */}
           {d.lrs.map(lr => {
