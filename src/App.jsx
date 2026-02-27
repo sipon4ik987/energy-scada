@@ -1,0 +1,749 @@
+import { useState, useCallback, useEffect, useRef } from "react";
+
+const uid = () => "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
+const ON = "#00e676", OFF = "#ff1744", BUS = "#ffd600", BUSOFF = "#3a2800";
+const WC = "#00bcd4", WO = "#1c2830", PNL = "#0e1822", DK = "#0a0f16", BG = "#1a2332";
+const TXT = "#b0bec5", TD = "#546e7a", TM = "#37474f", KR = "#ce93d8", LRC = "#ff9800";
+const FN = `'Share Tech Mono','JetBrains Mono',monospace`;
+
+const mkTP = (id, n, pw, rm6, x, y) => ({
+  id, name: n, power: pw, meterHv: "", rm6Type: rm6, x, y,
+  // RM6: I(in1), I(in2), D(tr), I(out1) — 4 порта
+  // vn: I(in), I(out), ВН(tr)
+  sw: { in1: true, in2: true, tr: true, out1: true },
+});
+const mkKR = (id, n, secs, x, y) => ({
+  id, name: n, x, y,
+  sections: secs.map((s, i) => ({ id: `${id}-s${i + 1}`, name: s, closed: true })),
+});
+const mkLR = (id, n, x, y) => ({ id, name: n, closed: true, meter: "", x, y });
+
+const INIT = {
+  buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" }, { id: "bus-rp", name: "РП-25" }],
+  inputBreakers: [
+    { id: "ib1", feedName: "Ф-213", busId: "bus-1", closed: true },
+    { id: "ib2", feedName: "Ф-313", busId: "bus-2", closed: true },
+    { id: "ib3", feedName: "Ф-11", busId: "bus-rp", closed: true },
+    { id: "ib4", feedName: "Ф-8", busId: "bus-rp", closed: true },
+  ],
+  sectionBreakers: [{ id: "sv1", fromBus: "bus-1", toBus: "bus-2", closed: false, name: "СВ яч.5-6" }],
+  cells: [
+    { id: "c1", busId: "bus-1", num: "1", type: "line", closed: true },
+    { id: "c2", busId: "bus-1", num: "2", type: "input", closed: true },
+    { id: "c3", busId: "bus-1", num: "3", type: "line", closed: true },
+    { id: "c4", busId: "bus-1", num: "4", type: "line", closed: true },
+    { id: "c5", busId: "bus-1", num: "5", type: "reserve", closed: false },
+    { id: "c6", busId: "bus-2", num: "6", type: "reserve", closed: false },
+    { id: "c7", busId: "bus-2", num: "7", type: "line", closed: true },
+    { id: "c8", busId: "bus-2", num: "8", type: "line", closed: true },
+    { id: "c9", busId: "bus-2", num: "9", type: "input", closed: true },
+    { id: "c10", busId: "bus-2", num: "10", type: "line", closed: true },
+  ],
+  lrs: [
+    mkLR("lr-213", "ЛР-213", 100, 170), mkLR("lr-213.1", "ЛР-213.1", 280, 340),
+    mkLR("lr-213.2", "ЛР-213.2", 310, 200), mkLR("lr-313.1", "ЛР-313.1", 620, 170),
+    mkLR("lr-313.2", "ЛР-313.2", 540, 230), mkLR("lr-8.1", "ЛР-8.1", 220, 580),
+    mkLR("lr-8.2", "ЛР-8.2", 320, 580),
+  ],
+  kruns: [
+    mkKR("kr1", "КРУН-1", ["С1", "С2"], 60, 240),
+    mkKR("kr2", "КРУН-2", ["С1", "С2", "С3"], 540, 130),
+    mkKR("kr3", "КРУН-3", ["С1", "С2"], 160, 380),
+    mkKR("kr4", "КРУН-4", ["С1", "С2", "С3"], 240, 390),
+    mkKR("kr5", "КРУН-5", ["С1", "С2", "С3", "С4"], 360, 280),
+    mkKR("kr76", "КРУН-76", ["С1", "С2"], 720, 380),
+    mkKR("krg", "КРУН-зел.", ["С1", "С2"], 500, 330),
+  ],
+  tps: [
+    mkTP("tp-3402", "ТП-3402", 1000, "rm6", 30, 350),
+    mkTP("tp-3403", "ТП-3403", 1000, "rm6", 30, 430),
+    mkTP("tp-1917-1", "ТП-1917/1", 1000, "rm6", 460, 200),
+    mkTP("tp-1917-2", "ТП-1917/2", 1000, "rm6", 580, 210),
+    mkTP("tp-1911-1", "ТП-1911/1", 1000, "rm6", 410, 370),
+    mkTP("tp-1911-2", "ТП-1911/2", 1000, "rm6", 350, 440),
+    mkTP("tp-1911-3", "ТП-1911/3", 1000, "rm6", 420, 500),
+    mkTP("tp-3401", "ТП-3401", 1000, "rm6", 290, 460),
+    mkTP("tp-1913", "ТП-1913", 1000, "rm6", 660, 250),
+    mkTP("tp-1912-1", "ТП-1912/1", 1000, "rm6", 670, 330),
+    mkTP("tp-1915", "ТП-1915", 1000, "rm6", 520, 400),
+    mkTP("tp-1916", "ТП-1916", 1000, "vn", 720, 460),
+    mkTP("tp-3504-1", "ТП-3504/1", 0, "vn", 140, 640),
+    mkTP("tp-3504-2", "ТП-3504/2", 0, "vn", 260, 660),
+    mkTP("tp-3505-1", "ТП-3505/1", 0, "vn", 380, 640),
+    mkTP("tp-3505-2", "ТП-3505/2", 0, "vn", 500, 660),
+  ],
+  links: [
+    { id: "l1", from: { block: "cell", id: "c1", port: "out" }, to: { block: "lr", id: "lr-213", port: "a" }, cable: "" },
+    { id: "l2", from: { block: "lr", id: "lr-213", port: "b" }, to: { block: "krun", id: "kr1", port: "s1" }, cable: "" },
+    { id: "l3", from: { block: "krun", id: "kr1", port: "s2" }, to: { block: "tp", id: "tp-3402", port: "in1" }, cable: "" },
+    { id: "l4", from: { block: "tp", id: "tp-3402", port: "out1" }, to: { block: "tp", id: "tp-3403", port: "in1" }, cable: "" },
+    { id: "l5", from: { block: "cell", id: "c3", port: "out" }, to: { block: "krun", id: "kr2", port: "s1" }, cable: "" },
+    { id: "l6", from: { block: "krun", id: "kr2", port: "s2" }, to: { block: "tp", id: "tp-1917-1", port: "in1" }, cable: "" },
+    { id: "l7", from: { block: "tp", id: "tp-1917-1", port: "out1" }, to: { block: "tp", id: "tp-1917-2", port: "in1" }, cable: "" },
+    { id: "l8", from: { block: "cell", id: "c4", port: "out" }, to: { block: "lr", id: "lr-213.2", port: "a" }, cable: "" },
+    { id: "l9", from: { block: "lr", id: "lr-213.2", port: "b" }, to: { block: "krun", id: "kr5", port: "s1" }, cable: "" },
+    { id: "l10", from: { block: "krun", id: "kr5", port: "s2" }, to: { block: "tp", id: "tp-1911-1", port: "in1" }, cable: "" },
+    { id: "l11", from: { block: "tp", id: "tp-1911-1", port: "out1" }, to: { block: "tp", id: "tp-1911-2", port: "in1" }, cable: "" },
+    { id: "l12", from: { block: "tp", id: "tp-1911-2", port: "out1" }, to: { block: "tp", id: "tp-1911-3", port: "in1" }, cable: "" },
+    { id: "l13", from: { block: "cell", id: "c4", port: "out" }, to: { block: "lr", id: "lr-213.1", port: "a" }, cable: "" },
+    { id: "l14", from: { block: "lr", id: "lr-213.1", port: "b" }, to: { block: "krun", id: "kr4", port: "s1" }, cable: "" },
+    { id: "l15", from: { block: "krun", id: "kr4", port: "s2" }, to: { block: "tp", id: "tp-3401", port: "in1" }, cable: "" },
+    { id: "l16", from: { block: "cell", id: "c7", port: "out" }, to: { block: "lr", id: "lr-313.2", port: "a" }, cable: "" },
+    { id: "l17", from: { block: "lr", id: "lr-313.2", port: "b" }, to: { block: "tp", id: "tp-1915", port: "in1" }, cable: "" },
+    { id: "l18", from: { block: "cell", id: "c8", port: "out" }, to: { block: "lr", id: "lr-313.1", port: "a" }, cable: "" },
+    { id: "l19", from: { block: "lr", id: "lr-313.1", port: "b" }, to: { block: "tp", id: "tp-1913", port: "in1" }, cable: "" },
+    { id: "l20", from: { block: "tp", id: "tp-1913", port: "out1" }, to: { block: "tp", id: "tp-1912-1", port: "in1" }, cable: "" },
+    { id: "l21", from: { block: "cell", id: "c10", port: "out" }, to: { block: "krun", id: "kr76", port: "s1" }, cable: "АСБЛ 3×240" },
+    { id: "l22", from: { block: "krun", id: "kr76", port: "s2" }, to: { block: "tp", id: "tp-1916", port: "in1" }, cable: "" },
+    { id: "l23", from: { block: "bus", id: "bus-rp", port: "out" }, to: { block: "lr", id: "lr-8.1", port: "a" }, cable: "" },
+    { id: "l24", from: { block: "lr", id: "lr-8.1", port: "b" }, to: { block: "tp", id: "tp-3504-1", port: "in1" }, cable: "" },
+    { id: "l25", from: { block: "tp", id: "tp-3504-1", port: "out1" }, to: { block: "tp", id: "tp-3504-2", port: "in1" }, cable: "" },
+    { id: "l26", from: { block: "tp", id: "tp-3504-2", port: "out1" }, to: { block: "tp", id: "tp-3505-1", port: "in1" }, cable: "" },
+    { id: "l27", from: { block: "tp", id: "tp-3505-1", port: "out1" }, to: { block: "tp", id: "tp-3505-2", port: "in1" }, cable: "" },
+  ],
+  switchLog: [],
+};
+
+// ═══ ENERGY ═══
+function busOn(bId, d) {
+  const v = new Set(); const c = id => { if (v.has(id)) return false; v.add(id);
+    if (d.inputBreakers.some(b => b.busId === id && b.closed)) return true;
+    for (const s of d.sectionBreakers) if (s.closed) { if (s.fromBus === id && c(s.toBus)) return true; if (s.toBus === id && c(s.fromBus)) return true; }
+    return false; }; return c(bId);
+}
+function pKey(p) {
+  if (p.block === "cell") return `cell:${p.id}`;
+  if (p.block === "bus") return `bus:${p.id}`;
+  if (p.block === "lr") return `lr:${p.id}`;
+  if (p.block === "krun") return `ks:${p.id}-${p.port}`;
+  if (p.block === "tp") return `tp-${p.port}:${p.id}`;
+  return "?";
+}
+function isEnergized(pk, d) {
+  const visited = new Set(); const queue = [];
+  d.cells.forEach(c => { if (c.closed && c.type !== "reserve" && busOn(c.busId, d)) queue.push(`cell:${c.id}`); });
+  d.buses.forEach(b => { if (busOn(b.id, d)) queue.push(`bus:${b.id}`); });
+  while (queue.length > 0) {
+    const cur = queue.shift(); if (visited.has(cur)) continue; visited.add(cur);
+    if (cur === pk) return true;
+    for (const link of d.links) {
+      const fk = pKey(link.from); if (fk !== cur) continue;
+      const tk = pKey(link.to); if (visited.has(tk)) continue;
+      const to = link.to;
+      if (to.block === "lr") { const lr = d.lrs.find(l => l.id === to.id); if (lr?.closed) queue.push(tk); }
+      else if (to.block === "krun") {
+        for (const kr of d.kruns) { const sec = kr.sections.find(s => s.id === `${to.id}-${to.port}`);
+          if (sec?.closed) { queue.push(tk); kr.sections.forEach(s2 => { if (s2.id !== sec.id && s2.closed) queue.push(`ks:${s2.id}`); }); } }
+      }
+      else if (to.block === "tp") {
+        const tp = d.tps.find(t => t.id === to.id);
+        if (to.port === "in1" && tp?.sw.in1) { queue.push(tk); if (tp.sw.in2) queue.push(`tp-in2:${tp.id}`); if (tp.sw.out1) queue.push(`tp-out1:${tp.id}`); }
+        else if (to.port === "in2" && tp?.sw.in2) { queue.push(tk); if (tp.sw.in1) queue.push(`tp-in1:${tp.id}`); if (tp.sw.out1) queue.push(`tp-out1:${tp.id}`); }
+        else if (to.port === "out1" && tp?.sw.out1) queue.push(tk);
+      } else queue.push(tk);
+    }
+    // TP internal propagation
+    if (cur.startsWith("tp-in1:")) { const tpId = cur.slice(7); const tp = d.tps.find(t => t.id === tpId);
+      if (tp?.sw.in1) { if (tp.sw.in2) queue.push(`tp-in2:${tpId}`); if (tp.sw.out1) queue.push(`tp-out1:${tpId}`); } }
+    if (cur.startsWith("tp-in2:")) { const tpId = cur.slice(7); const tp = d.tps.find(t => t.id === tpId);
+      if (tp?.sw.in2) { if (tp.sw.in1) queue.push(`tp-in1:${tpId}`); if (tp.sw.out1) queue.push(`tp-out1:${tpId}`); } }
+  }
+  return false;
+}
+function portEnergized(p, d) { return isEnergized(pKey(p), d); }
+
+// ═══ PORT POSITIONS ═══
+const TP_W = 90, TP_H = 56;
+function getPortPos(p, d) {
+  if (p.block === "tp") {
+    const tp = d.tps.find(t => t.id === p.id); if (!tp) return null;
+    if (p.port === "in1") return { x: tp.x, y: tp.y + 18 };
+    if (p.port === "in2") return { x: tp.x, y: tp.y + 34 };
+    if (p.port === "out1") return { x: tp.x + TP_W, y: tp.y + 18 };
+    if (p.port === "tr") return { x: tp.x + TP_W / 2, y: tp.y + TP_H };
+  }
+  if (p.block === "krun") {
+    const kr = d.kruns.find(k => k.id === p.id); if (!kr) return null;
+    const sIdx = parseInt(p.port.replace("s", "")) - 1;
+    return { x: kr.x + 25 + sIdx * 46, y: kr.y + 68 };
+  }
+  if (p.block === "lr") {
+    const lr = d.lrs.find(l => l.id === p.id); if (!lr) return null;
+    return p.port === "a" ? { x: lr.x, y: lr.y + 14 } : { x: lr.x + 50, y: lr.y + 14 };
+  }
+  if (p.block === "cell") {
+    const cells = d.cells; const idx = cells.findIndex(c => c.id === p.id);
+    return { x: 50 + idx * 70 + 15, y: 105 };
+  }
+  if (p.block === "bus") return { x: 780, y: 105 };
+  return null;
+}
+
+// ═══ MAIN ═══
+export default function App() {
+  const [d, setD] = useState(INIT);
+  const [showLog, setShowLog] = useState(false);
+  const [drag, setDrag] = useState(null);
+  const [modal, setModal] = useState(null);
+  const [connecting, setConnecting] = useState(null); // {block,id,port} or null
+  const [time, setTime] = useState(new Date());
+  const svgRef = useRef(null);
+  useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
+
+  const log = useCallback(desc => { setD(p => ({ ...p, switchLog: [{ t: new Date().toLocaleString("ru-RU"), d: desc }, ...p.switchLog].slice(0, 300) })); }, []);
+
+  // Toggles
+  const togIB = id => setD(p => { const b = p.inputBreakers.find(x => x.id === id); log(`${b.feedName}: ${b.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...p, inputBreakers: p.inputBreakers.map(x => x.id === id ? { ...x, closed: !x.closed } : x) }; });
+  const togSB = id => setD(p => { const s = p.sectionBreakers.find(x => x.id === id); log(`${s.name}: ${s.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...p, sectionBreakers: p.sectionBreakers.map(x => x.id === id ? { ...x, closed: !x.closed } : x) }; });
+  const togCell = id => setD(p => { const c = p.cells.find(x => x.id === id); log(`Яч.${c.num}: ${c.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...p, cells: p.cells.map(x => x.id === id ? { ...x, closed: !x.closed } : x) }; });
+  const togLR = id => setD(p => { const l = d.lrs.find(x => x.id === id); log(`${l.name}: ${l.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...p, lrs: p.lrs.map(x => x.id === id ? { ...x, closed: !x.closed } : x) }; });
+  const togKS = (krId, sId) => setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === krId ? { ...k, sections: k.sections.map(s => { if (s.id === sId) { log(`${k.name}/${s.name}: ${s.closed ? "ОТКЛ" : "ВКЛ"}`); return { ...s, closed: !s.closed }; } return s; }) } : k) }));
+  const togTP = (tpId, key) => setD(p => { const tp = p.tps.find(t => t.id === tpId); log(`${tp.name} ${key}: ${tp.sw[key] ? "ОТКЛ" : "ВКЛ"}`); return { ...p, tps: p.tps.map(t => t.id === tpId ? { ...t, sw: { ...t.sw, [key]: !t.sw[key] } } : t) }; });
+
+  // Port click for connecting
+  const onPortClick = (portRef) => {
+    if (!connecting) { setConnecting(portRef); return; }
+    // Create link
+    const id = uid();
+    setD(p => ({ ...p, links: [...p.links, { id, from: connecting, to: portRef, cable: "" }] }));
+    log(`Кабель: ${pKey(connecting)} → ${pKey(portRef)}`);
+    setConnecting(null);
+  };
+
+  // CRUD helpers
+  const inp = { w: "100%", p: 6, bg: DK, bd: "1px solid #263238", br: 4, c: TXT, ff: FN, fs: 10, ol: "none", bx: "border-box" };
+  const inpS = { width: inp.w, padding: inp.p, background: inp.bg, border: inp.bd, borderRadius: inp.br, color: inp.c, fontFamily: inp.ff, fontSize: inp.fs, outline: inp.ol, boxSizing: inp.bx };
+  const lbl = { color: TD, fontSize: 8, display: "block", marginBottom: 2 };
+  const fld = (label, value, onChange, type = "text", ph = "") => (
+    <div style={{ marginBottom: 8 }}><label style={lbl}>{label}</label>
+      <input type={type} value={value} onChange={e => onChange(e.target.value)} placeholder={ph} style={inpS} /></div>);
+  const sel = (label, value, onChange, opts) => (
+    <div style={{ marginBottom: 8 }}><label style={lbl}>{label}</label>
+      <select value={value} onChange={e => onChange(e.target.value)} style={inpS}>
+        {opts.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}</select></div>);
+  const dangerBtn = (text, onClick) => <button onClick={onClick} style={{ padding: "4px 10px", background: "#4a1515", border: "1px solid #ff174440", borderRadius: 4, color: OFF, fontFamily: FN, fontSize: 8, cursor: "pointer", marginTop: 6 }}>{text}</button>;
+
+  // Cell
+  const addCell = () => setModal({ type: "ac", f: { num: String(d.cells.length + 1), busId: "bus-1", type: "line" } });
+  const editCell = c => setModal({ type: "ec", id: c.id, f: { num: c.num, busId: c.busId, type: c.type } });
+  const delCell = id => { setD(p => ({ ...p, cells: p.cells.filter(c => c.id !== id), links: p.links.filter(l => !(l.from.block === "cell" && l.from.id === id) && !(l.to.block === "cell" && l.to.id === id)) })); setModal(null); };
+
+  // TP
+  const addTP = () => {
+    const id = uid();
+    const x = 300 + d.tps.length * 20, y = 300 + d.tps.length * 15;
+    setD(p => ({ ...p, tps: [...p.tps, mkTP(id, "Новая ТП", 1000, "rm6", x, y)] }));
+    setModal({ type: "etp", id, f: { name: "Новая ТП", power: "1000", meterHv: "", rm6Type: "rm6", cable10: "", trNominal: "1000", cells04: "12", cellNominal: "630" } });
+  };
+  const editTP = tp => setModal({ type: "etp", id: tp.id, f: {
+    name: tp.name, power: String(tp.power || ""), meterHv: tp.meterHv || "",
+    rm6Type: tp.rm6Type, cable10: tp.cable10 || "", trNominal: String(tp.trNominal || tp.power || ""),
+    cells04: String(tp.cells04 || 12), cellNominal: String(tp.cellNominal || 630),
+  }});
+  const delTP = id => { setD(p => ({ ...p, tps: p.tps.filter(t => t.id !== id), links: p.links.filter(l => !(l.from.block === "tp" && l.from.id === id) && !(l.to.block === "tp" && l.to.id === id)) })); setModal(null); };
+
+  // KRUN
+  const addKR = () => {
+    const id = uid();
+    const x = 200 + d.kruns.length * 30, y = 250 + d.kruns.length * 20;
+    const kr = mkKR(id, "Новый КРУН", ["С1", "С2"], x, y);
+    setD(p => ({ ...p, kruns: [...p.kruns, kr] }));
+    setModal({ type: "ekr", id, f: { name: "Новый КРУН", sections: kr.sections.map(s => ({ ...s })) } });
+  };
+  const editKR = kr => setModal({ type: "ekr", id: kr.id, f: { name: kr.name, sections: kr.sections.map(s => ({ ...s })) } });
+  const delKR = id => { setD(p => ({ ...p, kruns: p.kruns.filter(k => k.id !== id), links: p.links.filter(l => !(l.from.block === "krun" && l.from.id === id) && !(l.to.block === "krun" && l.to.id === id)) })); setModal(null); };
+
+  // LR
+  const addLR = () => {
+    const id = uid();
+    const x = 250 + d.lrs.length * 25, y = 200 + d.lrs.length * 15;
+    setD(p => ({ ...p, lrs: [...p.lrs, mkLR(id, "Новый ЛР", x, y)] }));
+    setModal({ type: "elr", id, f: { name: "Новый ЛР", meter: "" } });
+  };
+  const editLR = lr => setModal({ type: "elr", id: lr.id, f: { name: lr.name, meter: lr.meter || "" } });
+  const delLR = id => { setD(p => ({ ...p, lrs: p.lrs.filter(l => l.id !== id), links: p.links.filter(l => !(l.from.block === "lr" && l.from.id === id) && !(l.to.block === "lr" && l.to.id === id)) })); setModal(null); };
+
+  const uf = (k, v) => setModal(m => ({ ...m, f: { ...m.f, [k]: v } }));
+
+  const save = () => {
+    if (!modal) return; const { type, id, f } = modal;
+    if (type === "ac") setD(p => ({ ...p, cells: [...p.cells, { id: uid(), num: f.num, busId: f.busId, type: f.type, closed: f.type !== "reserve" }] }));
+    else if (type === "ec") setD(p => ({ ...p, cells: p.cells.map(c => c.id === id ? { ...c, num: f.num, busId: f.busId, type: f.type } : c) }));
+    else if (type === "etp") setD(p => ({ ...p, tps: p.tps.map(t => t.id === id ? { ...t, name: f.name, power: Number(f.power) || 0, meterHv: f.meterHv, rm6Type: f.rm6Type, cable10: f.cable10, trNominal: Number(f.trNominal) || 0, cells04: Number(f.cells04) || 12, cellNominal: Number(f.cellNominal) || 630 } : t) }));
+    else if (type === "ekr") setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === id ? { ...k, name: f.name, sections: f.sections } : k) }));
+    else if (type === "elr") setD(p => ({ ...p, lrs: p.lrs.map(l => l.id === id ? { ...l, name: f.name, meter: f.meter } : l) }));
+    setModal(null);
+  };
+  const delLink = id => setD(p => ({ ...p, links: p.links.filter(l => l.id !== id) }));
+
+  // Drag
+  const startDrag = (e, type, id) => {
+    if (e.button !== 0 || connecting) return;
+    if (e.defaultPrevented) return;
+    if (e.altKey) return; // alt+click is for panning
+    const svg = svgRef.current; if (!svg) return;
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+    setDrag({ type, id, sx: sp.x, sy: sp.y }); e.preventDefault();
+  };
+  const onMM = useCallback(e => { if (!drag) return; const svg = svgRef.current; if (!svg) return;
+    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return;
+    const sp = pt.matrixTransform(ctm.inverse());
+    const dx = sp.x - drag.sx, dy = sp.y - drag.sy;
+    if (drag.type === "tp") setD(p => ({ ...p, tps: p.tps.map(t => t.id === drag.id ? { ...t, x: t.x + dx, y: t.y + dy } : t) }));
+    else if (drag.type === "krun") setD(p => ({ ...p, kruns: p.kruns.map(k => k.id === drag.id ? { ...k, x: k.x + dx, y: k.y + dy } : k) }));
+    else if (drag.type === "lr") setD(p => ({ ...p, lrs: p.lrs.map(l => l.id === drag.id ? { ...l, x: l.x + dx, y: l.y + dy } : l) }));
+    setDrag(pr => ({ ...pr, sx: sp.x, sy: sp.y })); }, [drag]);
+  const onMU = useCallback(() => setDrag(null), []);
+  useEffect(() => { window.addEventListener("mousemove", onMM); window.addEventListener("mouseup", onMU);
+    return () => { window.removeEventListener("mousemove", onMM); window.removeEventListener("mouseup", onMU); }; }, [onMM, onMU]);
+
+  const s1 = busOn("bus-1", d), s2 = busOn("bus-2", d), rp = busOn("bus-rp", d);
+  const tpOnCnt = d.tps.filter(t => isEnergized(`tp-in1:${t.id}`, d) && t.sw.tr).length;
+  
+  // Large canvas
+  const CANVAS_W = 3000, CANVAS_H = 2000;
+  
+  // Pan & Zoom state
+  const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
+  const [panning, setPanning] = useState(null);
+  const containerRef = useRef(null);
+  
+  const onWheel = useCallback(e => {
+    e.preventDefault();
+    const delta = e.deltaY > 0 ? -0.1 : 0.1;
+    setView(v => {
+      const newZoom = Math.max(0.2, Math.min(3, v.zoom + delta));
+      // Zoom towards cursor
+      const rect = containerRef.current?.getBoundingClientRect();
+      if (!rect) return { ...v, zoom: newZoom };
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const scale = newZoom / v.zoom;
+      return {
+        x: mx - scale * (mx - v.x),
+        y: my - scale * (my - v.y),
+        zoom: newZoom,
+      };
+    });
+  }, []);
+  
+  const onPanStart = useCallback(e => {
+    // Middle button or Ctrl+Left for panning
+    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+      e.preventDefault();
+      setPanning({ sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y });
+    }
+  }, [view]);
+  
+  const onPanMove = useCallback(e => {
+    if (!panning) return;
+    setView(v => ({
+      ...v,
+      x: panning.vx + (e.clientX - panning.sx),
+      y: panning.vy + (e.clientY - panning.sy),
+    }));
+  }, [panning]);
+  
+  const onPanEnd = useCallback(() => setPanning(null), []);
+  
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [onWheel]);
+  
+  useEffect(() => {
+    if (panning) {
+      window.addEventListener("mousemove", onPanMove);
+      window.addEventListener("mouseup", onPanEnd);
+      return () => { window.removeEventListener("mousemove", onPanMove); window.removeEventListener("mouseup", onPanEnd); };
+    }
+  }, [panning, onPanMove, onPanEnd]);
+  
+  const resetView = () => setView({ x: 0, y: 0, zoom: 1 });
+  const zoomIn = () => setView(v => ({ ...v, zoom: Math.min(3, v.zoom + 0.2) }));
+  const zoomOut = () => setView(v => ({ ...v, zoom: Math.max(0.2, v.zoom - 0.2) }));
+  
+  const zBtn = { width: 28, height: 28, borderRadius: 4, background: PNL, border: `1px solid #263238`, color: WC, fontFamily: FN, fontSize: 14, fontWeight: 700, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center" };
+  const fitAll = () => {
+    // Calculate bounding box of all objects
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    d.tps.forEach(t => { minX = Math.min(minX, t.x); minY = Math.min(minY, t.y); maxX = Math.max(maxX, t.x + TP_W); maxY = Math.max(maxY, t.y + TP_H); });
+    d.kruns.forEach(k => { minX = Math.min(minX, k.x); minY = Math.min(minY, k.y); maxX = Math.max(maxX, k.x + k.sections.length * 46 + 40); maxY = Math.max(maxY, k.y + 80); });
+    d.lrs.forEach(l => { minX = Math.min(minX, l.x); minY = Math.min(minY, l.y); maxX = Math.max(maxX, l.x + 60); maxY = Math.max(maxY, l.y + 40); });
+    minX = Math.min(minX, 30); minY = Math.min(minY, 50);
+    maxX = Math.max(maxX, d.cells.length * 70 + 100);
+    if (minX === Infinity) return resetView();
+    const rect = containerRef.current?.getBoundingClientRect();
+    if (!rect) return resetView();
+    const pad = 40;
+    const bw = maxX - minX + pad * 2, bh = maxY - minY + pad * 2;
+    const zoom = Math.min(rect.width / bw, rect.height / bh, 2);
+    setView({ x: -minX * zoom + pad * zoom + (rect.width - bw * zoom) / 2, y: -minY * zoom + pad * zoom + (rect.height - bh * zoom) / 2, zoom });
+  };
+
+  // SVG switch
+  const Sw = ({ x, y, on, onClick, sz = 10 }) => (
+    <g onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onClick(); }} style={{ cursor: "pointer" }}>
+      <rect x={x - sz / 2} y={y - sz / 2} width={sz} height={sz} rx={2} fill={on ? "#1b5e20" : "#6b1515"} stroke={on ? ON : OFF} strokeWidth={.8} />
+      {on ? <line x1={x} y1={y - sz / 2 + 2} x2={x} y2={y + sz / 2 - 2} stroke={ON} strokeWidth={1.5} /> :
+        <><line x1={x - 2.5} y1={y - 2.5} x2={x + 2.5} y2={y + 2.5} stroke={OFF} strokeWidth={1} />
+          <line x1={x + 2.5} y1={y - 2.5} x2={x - 2.5} y2={y + 2.5} stroke={OFF} strokeWidth={1} /></>}
+    </g>
+  );
+
+  // Port dot — clickable for connecting. Uses onMouseDown+stopPropagation to prevent drag
+  const Port = ({ x, y, on, label, portRef }) => {
+    const isActive = connecting && pKey(connecting) === pKey(portRef);
+    const handleClick = e => {
+      e.stopPropagation();
+      e.preventDefault();
+      onPortClick(portRef);
+    };
+    return (
+      <g onMouseDown={handleClick} style={{ cursor: connecting ? "crosshair" : "pointer" }}>
+        {/* Bigger invisible hit area */}
+        <circle cx={x} cy={y} r={12} fill="transparent" />
+        <circle cx={x} cy={y} r={6} fill={isActive ? "#ff0" : on ? WC : "#1a2a30"}
+          stroke={isActive ? "#ff0" : on ? WC : "#2a3a40"} strokeWidth={isActive ? 2.5 : 1.5}
+          style={isActive ? { filter: "drop-shadow(0 0 6px #ff0)" } : on ? { filter: `drop-shadow(0 0 4px ${WC}60)` } : {}} />
+        <circle cx={x} cy={y} r={2.5} fill={isActive ? "#000" : on ? "#fff" : "#444"} />
+        {label && <text x={x} y={y - 10} textAnchor="middle" fill={on ? WC : TM} fontSize={6} fontWeight="bold" fontFamily={FN}>{label}</text>}
+      </g>
+    );
+  };
+
+  return (
+    <div style={{ background: DK, minHeight: "100vh", fontFamily: FN, color: TXT, display: "flex", flexDirection: "column" }}>
+      {/* Header */}
+      <div style={{ padding: "5px 12px", borderBottom: "1px solid #1a2332", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ffd600" strokeWidth="2.5"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" /></svg>
+          <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 2 }}>ЭНЕРГОУЧЁТ</span>
+        </div>
+        <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: 8, color: ON, background: "#0d2818", padding: "1px 5px", borderRadius: 3 }}>{time.toLocaleString("ru-RU")}</span>
+          {[{ l: "I", on: s1 }, { l: "II", on: s2 }, { l: "РП", on: rp }].map((s, i) =>
+            <span key={i} style={{ fontSize: 7, padding: "1px 5px", borderRadius: 2, color: s.on ? ON : OFF, background: s.on ? "#0d2818" : "#2a1010" }}>{s.l}</span>)}
+          <span style={{ fontSize: 7, color: BUS }}>ТП:{tpOnCnt}/{d.tps.length}</span>
+          {connecting && <span style={{ fontSize: 8, color: "#ff0", background: "#332800", padding: "1px 6px", borderRadius: 3, border: "1px solid #ff0" }}>
+            🔗 Выбери вторую точку...
+            <button onClick={() => setConnecting(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
+          </span>}
+          <button onClick={addCell} style={{ padding: "1px 6px", borderRadius: 2, background: BUS + "10", border: `1px solid ${BUS}40`, color: BUS, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ Яч.</button>
+          <button onClick={addTP} style={{ padding: "1px 6px", borderRadius: 2, background: ON + "10", border: `1px solid ${ON}40`, color: ON, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ ТП</button>
+          <button onClick={addKR} style={{ padding: "1px 6px", borderRadius: 2, background: KR + "10", border: `1px solid ${KR}40`, color: KR, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ КРУН</button>
+          <button onClick={addLR} style={{ padding: "1px 6px", borderRadius: 2, background: LRC + "10", border: `1px solid ${LRC}40`, color: LRC, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ ЛР</button>
+          <button onClick={() => setShowLog(!showLog)} style={{ padding: "1px 5px", borderRadius: 2, background: "none", border: `1px solid ${TD}30`, color: TD, fontSize: 7, cursor: "pointer", fontFamily: FN }}>◷{d.switchLog.length}</button>
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{ display: "flex", gap: 3, padding: "3px 12px", borderBottom: "1px solid #1a2332", flexWrap: "wrap" }}>
+        {d.inputBreakers.map(ib =>
+          <button key={ib.id} onClick={() => togIB(ib.id)} style={{ padding: "1px 4px", borderRadius: 2, background: ib.closed ? "#0d2818" : "#2a1010", border: `1px solid ${ib.closed ? "#2e7d32" : "#4a2020"}`, cursor: "pointer", color: ib.closed ? ON : OFF, fontFamily: FN, fontSize: 7 }}>{ib.feedName}</button>)}
+        {d.sectionBreakers.map(sb =>
+          <button key={sb.id} onClick={() => togSB(sb.id)} style={{ padding: "1px 4px", borderRadius: 2, background: sb.closed ? "#0d2818" : "#2a1010", border: `1px solid ${sb.closed ? "#2e7d32" : "#4a2020"}`, cursor: "pointer", color: sb.closed ? ON : OFF, fontFamily: FN, fontSize: 7 }}>{sb.name}</button>)}
+      </div>
+
+      {/* SVG Canvas with Pan & Zoom */}
+      <div ref={containerRef} onMouseDown={onPanStart}
+        style={{ flex: 1, overflow: "hidden", background: `radial-gradient(ellipse at 50% 20%, #111a24 0%, ${DK} 70%)`, position: "relative", cursor: panning ? "grabbing" : "default" }}>
+        
+        {/* Zoom controls */}
+        <div style={{ position: "absolute", right: 12, top: 12, zIndex: 10, display: "flex", flexDirection: "column", gap: 3 }}>
+          <button onClick={zoomIn} style={zBtn}>＋</button>
+          <button onClick={zoomOut} style={zBtn}>−</button>
+          <button onClick={fitAll} style={zBtn}>⊡</button>
+          <button onClick={resetView} style={zBtn}>1:1</button>
+          <div style={{ textAlign: "center", fontSize: 7, color: TD, marginTop: 2 }}>{Math.round(view.zoom * 100)}%</div>
+        </div>
+        
+        {/* Pan/zoom hint */}
+        <div style={{ position: "absolute", left: 12, bottom: 8, zIndex: 10, fontSize: 7, color: TM }}>
+          Колёсико: зум · Alt+тяни: пан · Тяни блок: двигать
+        </div>
+        
+        <svg ref={svgRef} width={CANVAS_W} height={CANVAS_H} viewBox={`0 0 ${CANVAS_W} ${CANVAS_H}`}
+          style={{ display: "block", transform: `translate(${view.x}px, ${view.y}px) scale(${view.zoom})`, transformOrigin: "0 0" }}>
+          <defs><pattern id="g" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0L0 0 0 30" fill="none" stroke="#162030" strokeWidth="0.3" /></pattern></defs>
+          <rect width={CANVAS_W} height={CANVAS_H} fill="url(#g)" />
+
+          {/* Buses - scale to cells */}
+          {(() => {
+            const s1cells = d.cells.filter(c => c.busId === "bus-1").length;
+            const s2start = 50 + s1cells * 70 + 30;
+            const s2cells = d.cells.filter(c => c.busId === "bus-2").length;
+            const rpStart = s2start + s2cells * 70 + 30;
+            return <>
+              <rect x={40} y={65} width={s1cells * 70 + 10} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
+              <text x={40 + (s1cells * 70) / 2} y={61} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={7} fontFamily={FN}>Секция I</text>
+              <rect x={s2start - 20} y={65} width={20} height={4} rx={1} fill={d.sectionBreakers[0]?.closed ? BUS : BUSOFF} />
+              <rect x={s2start} y={65} width={s2cells * 70 + 10} height={4} rx={1} fill={s2 ? BUS : BUSOFF} />
+              <text x={s2start + (s2cells * 70) / 2} y={61} textAnchor="middle" fill={s2 ? BUS : TD} fontSize={7} fontFamily={FN}>Секция II</text>
+              <rect x={rpStart} y={65} width={80} height={4} rx={1} fill={rp ? WC : WO} />
+              <text x={rpStart + 40} y={61} textAnchor="middle" fill={rp ? WC : TD} fontSize={6} fontFamily={FN}>РП-25</text>
+            </>;
+          })()}
+
+          {/* Cables (behind blocks) */}
+          {d.links.map(link => {
+            const fp = getPortPos(link.from, d); const tp = getPortPos(link.to, d);
+            if (!fp || !tp) return null;
+            const fOn = portEnergized(link.from, d); const tOn = portEnergized(link.to, d);
+            const on = fOn && tOn; const mx = (fp.x + tp.x) / 2, my = (fp.y + tp.y) / 2;
+            return (<g key={link.id}>
+              <line x1={fp.x} y1={fp.y} x2={tp.x} y2={tp.y} stroke={on ? WC : WO} strokeWidth={on ? 1.8 : .8}
+                style={on ? { filter: `drop-shadow(0 0 2px ${WC}40)` } : {}} />
+              {link.cable && <text x={mx} y={my - 4} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>{link.cable}</text>}
+              {/* Delete X on hover — always show small */}
+              <g onClick={e => { e.stopPropagation(); delLink(link.id); }} style={{ cursor: "pointer" }}>
+                <circle cx={mx} cy={my} r={4} fill="#2a1010" stroke="#4a2020" strokeWidth={.5} opacity={.6} />
+                <text x={mx} y={my + 2.5} textAnchor="middle" fill={OFF} fontSize={6} fontFamily={FN}>✕</text>
+              </g>
+            </g>);
+          })}
+
+          {/* Cells */}
+          {d.cells.map((cell, idx) => {
+            const cx = 50 + idx * 70; const cy = 75;
+            const bOn = busOn(cell.busId, d); const on = bOn && cell.closed;
+            const isRes = cell.type === "reserve";
+            return (<g key={cell.id}>
+              <rect x={cx} y={cy} width={30} height={26} rx={3}
+                fill={isRes ? "#141020" : on ? "#0d1f12" : "#1a1212"}
+                stroke={isRes ? "#7c4dff30" : on ? BUS + "40" : "#26323850"} strokeWidth={1} opacity={isRes ? .5 : 1} />
+              <text x={cx + 15} y={cy - 3} textAnchor="middle" fill={isRes ? "#7c4dff" : on ? BUS : TD}
+                fontSize={7} fontWeight="bold" fontFamily={FN} style={{ cursor: "pointer" }}
+                onClick={e => { e.stopPropagation(); editCell(cell); }}>Яч.{cell.num}</text>
+              {!isRes && <Sw x={cx + 15} y={cy + 13} on={cell.closed} onClick={() => togCell(cell.id)} sz={10} />}
+              {isRes && <text x={cx + 15} y={cy + 15} textAnchor="middle" fill="#7c4dff" fontSize={6} fontFamily={FN}>рез</text>}
+              {!isRes && <>
+                <line x1={cx + 15} y1={cy + 20} x2={cx + 15} y2={cy + 30} stroke={on ? BUS : WO} strokeWidth={1.5} />
+                <Port x={cx + 15} y={cy + 30} on={on} label="" portRef={{ block: "cell", id: cell.id, port: "out" }} />
+              </>}
+            </g>);
+          })}
+
+          {/* LRs */}
+          {d.lrs.map(lr => {
+            const en = portEnergized({ block: "lr", id: lr.id, port: "a" }, d) && lr.closed;
+            return (<g key={lr.id} onMouseDown={e => startDrag(e, "lr", lr.id)} style={{ cursor: drag ? "grabbing" : "grab" }}>
+              <rect x={lr.x} y={lr.y} width={50} height={28} rx={3}
+                fill={en ? "#1a1a08" : "#1a1212"} stroke={en ? LRC + "50" : "#26323850"} strokeWidth={1} />
+              <text x={lr.x + 25} y={lr.y - 3} textAnchor="middle" fill={en ? LRC : TD}
+                fontSize={7} fontWeight="bold" fontFamily={FN}
+                style={{ cursor: "pointer" }} onClick={e => { e.stopPropagation(); editLR(lr); }}>{lr.name}</text>
+              <Port x={lr.x} y={lr.y + 14} on={en} label="A" portRef={{ block: "lr", id: lr.id, port: "a" }} />
+              <line x1={lr.x + 5} y1={lr.y + 14} x2={lr.x + 16} y2={lr.y + 14} stroke={en ? LRC : WO} strokeWidth={1.5} />
+              <Sw x={lr.x + 25} y={lr.y + 14} on={lr.closed} onClick={() => togLR(lr.id)} sz={12} />
+              <line x1={lr.x + 34} y1={lr.y + 14} x2={lr.x + 45} y2={lr.y + 14} stroke={en ? LRC : WO} strokeWidth={1.5} />
+              <Port x={lr.x + 50} y={lr.y + 14} on={en} label="B" portRef={{ block: "lr", id: lr.id, port: "b" }} />
+            </g>);
+          })}
+
+          {/* KRUNs */}
+          {d.kruns.map(kr => {
+            const W = Math.max(80, kr.sections.length * 46 + 20);
+            const anyOn = kr.sections.some(s => s.closed && isEnergized(`ks:${s.id}`, d));
+            return (<g key={kr.id} onMouseDown={e => startDrag(e, "krun", kr.id)} style={{ cursor: drag ? "grabbing" : "grab" }}>
+              <rect x={kr.x} y={kr.y} width={W} height={68} rx={5}
+                fill={anyOn ? "#1a1028" : "#141020"} stroke={anyOn ? KR + "60" : "#26323850"} strokeWidth={1.2} />
+              <text x={kr.x + W / 2} y={kr.y - 4} textAnchor="middle" fill={anyOn ? KR : TD}
+                fontSize={9} fontWeight="bold" fontFamily={FN} style={{ cursor: "pointer" }}
+                onClick={e => { e.stopPropagation(); editKR(kr); }}>{kr.name}</text>
+              <line x1={kr.x + 10} y1={kr.y + 22} x2={kr.x + W - 10} y2={kr.y + 22}
+                stroke={anyOn ? KR : BUSOFF} strokeWidth={3} strokeLinecap="round" />
+              {kr.sections.map((sec, i) => {
+                const sx = kr.x + 25 + i * 46;
+                const secOn = sec.closed && isEnergized(`ks:${sec.id}`, d);
+                return (<g key={sec.id}>
+                  <line x1={sx} y1={kr.y + 24} x2={sx} y2={kr.y + 36} stroke={secOn ? KR : WO} strokeWidth={1.5} />
+                  <Sw x={sx} y={kr.y + 42} on={sec.closed} onClick={() => togKS(kr.id, sec.id)} sz={10} />
+                  <line x1={sx} y1={kr.y + 48} x2={sx} y2={kr.y + 64} stroke={secOn ? KR : WO} strokeWidth={1.5} />
+                  <Port x={sx} y={kr.y + 68} on={secOn} label={sec.name}
+                    portRef={{ block: "krun", id: kr.id, port: `s${i + 1}` }} />
+                </g>);
+              })}
+            </g>);
+          })}
+
+          {/* TPs — with RM6 ports: in1, in2, D(tr), out1 */}
+          {d.tps.map(tp => {
+            const in1On = isEnergized(`tp-in1:${tp.id}`, d);
+            const trOn = in1On && tp.sw.tr;
+            const outOn = in1On && tp.sw.out1;
+            return (<g key={tp.id} onMouseDown={e => startDrag(e, "tp", tp.id)} style={{ cursor: drag ? "grabbing" : "grab" }}>
+              <rect x={tp.x} y={tp.y} width={TP_W} height={TP_H} rx={4}
+                fill={trOn ? "#0d1f12" : in1On ? "#111a10" : "#1a1212"}
+                stroke={trOn ? ON + "60" : in1On ? BUS + "30" : "#26323850"} strokeWidth={1.2} />
+              <text x={tp.x + TP_W / 2} y={tp.y - 4} textAnchor="middle" fill={trOn ? BUS : in1On ? "#a5d6a7" : TD}
+                fontSize={8} fontWeight="bold" fontFamily={FN} style={{ cursor: "pointer" }}
+                onClick={e => { e.stopPropagation(); editTP(tp); }}>{tp.name}</text>
+              {tp.power > 0 && <text x={tp.x + TP_W / 2} y={tp.y - 12} textAnchor="middle" fill={TM} fontSize={6} fontFamily={FN}>{tp.power}кВА</text>}
+
+              {/* Port in1 (I ввод) */}
+              <Port x={tp.x} y={tp.y + 18} on={in1On} label="I вв" portRef={{ block: "tp", id: tp.id, port: "in1" }} />
+              <line x1={tp.x + 5} y1={tp.y + 18} x2={tp.x + 16} y2={tp.y + 18} stroke={in1On ? WC : WO} strokeWidth={1.5} />
+              <Sw x={tp.x + 22} y={tp.y + 18} on={tp.sw.in1} onClick={() => togTP(tp.id, "in1")} />
+
+              {/* Internal bus */}
+              <line x1={tp.x + 28} y1={tp.y + 18} x2={tp.x + 62} y2={tp.y + 18} stroke={in1On ? WC : WO} strokeWidth={1} />
+
+              {/* Port in2 (I ввод2 — для кольцевого питания) */}
+              <Port x={tp.x} y={tp.y + 38} on={isEnergized(`tp-in2:${tp.id}`, d)} label="I вв2"
+                portRef={{ block: "tp", id: tp.id, port: "in2" }} />
+              <line x1={tp.x + 5} y1={tp.y + 38} x2={tp.x + 16} y2={tp.y + 38} stroke={isEnergized(`tp-in2:${tp.id}`, d) ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + 22} y={tp.y + 38} on={tp.sw.in2} onClick={() => togTP(tp.id, "in2")} sz={8} />
+              <line x1={tp.x + 28} y1={tp.y + 38} x2={tp.x + 28} y2={tp.y + 18} stroke={WO} strokeWidth={.5} strokeDasharray="2" />
+
+              {/* D/ВН branch down */}
+              <line x1={tp.x + 45} y1={tp.y + 18} x2={tp.x + 45} y2={tp.y + 28} stroke={in1On ? WC : WO} strokeWidth={1} />
+              <Sw x={tp.x + 45} y={tp.y + 33} on={tp.sw.tr} onClick={() => togTP(tp.id, "tr")} sz={9} />
+              <text x={tp.x + 45} y={tp.y + 27} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>
+                {tp.rm6Type === "rm6" ? "D" : "ВН"}</text>
+              <circle cx={tp.x + 45} cy={tp.y + 42} r={3} fill="none" stroke={trOn ? BUS : BUSOFF} strokeWidth={1} />
+              <circle cx={tp.x + 45} cy={tp.y + 48} r={3} fill="none" stroke={trOn ? WC : WO} strokeWidth={1} />
+              <text x={tp.x + 45} y={tp.y + 56} textAnchor="middle" fill={trOn ? ON : TM} fontSize={5} fontFamily={FN}>
+                {trOn ? "● 0.4" : "○ 0.4"}</text>
+
+              {/* Port out1 (I выход) */}
+              <Sw x={tp.x + 68} y={tp.y + 18} on={tp.sw.out1} onClick={() => togTP(tp.id, "out1")} />
+              <line x1={tp.x + 74} y1={tp.y + 18} x2={tp.x + 85} y2={tp.y + 18} stroke={outOn ? WC : WO} strokeWidth={1.5} />
+              <Port x={tp.x + TP_W} y={tp.y + 18} on={outOn} label="I вых" portRef={{ block: "tp", id: tp.id, port: "out1" }} />
+            </g>);
+          })}
+        </svg>
+      </div>
+
+      {/* Log */}
+      {showLog && <div style={{ position: "fixed", right: 0, top: 0, bottom: 0, width: 240, background: PNL, borderLeft: "1px solid #1a2332", zIndex: 900, display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: 6, borderBottom: "1px solid #1a2332", display: "flex", justifyContent: "space-between" }}>
+          <span style={{ fontSize: 9, fontWeight: 700, color: "#ffb300" }}>Журнал</span>
+          <button onClick={() => setShowLog(false)} style={{ background: BG, border: "1px solid #263238", color: TD, cursor: "pointer", width: 18, height: 18, borderRadius: 3, fontSize: 10 }}>✕</button></div>
+        <div style={{ flex: 1, overflow: "auto", padding: 4 }}>
+          {d.switchLog.map((e, i) => <div key={i} style={{ padding: "2px 4px", marginBottom: 1, borderRadius: 2, background: DK }}>
+            <span style={{ fontSize: 5, color: TM }}>{e.t} </span><span style={{ fontSize: 7, color: TXT }}>{e.d}</span></div>)}
+        </div>
+      </div>}
+
+      {/* Modal */}
+      {modal && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setModal(null)}>
+        <div style={{ background: PNL, border: "1px solid #263238", borderRadius: 10, padding: 20, minWidth: 380, maxWidth: 500, maxHeight: "85vh", overflowY: "auto" }} onClick={e => e.stopPropagation()}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+            <h3 style={{ margin: 0, color: "#4fc3f7", fontFamily: FN, fontSize: 13 }}>
+              {modal.type === "ac" ? "＋ Новая ячейка" : modal.type === "ec" ? `✎ Ячейка ${modal.f.num}` :
+                modal.type === "etp" ? `✎ ${modal.f.name}` : modal.type === "ekr" ? `✎ ${modal.f.name}` :
+                modal.type === "elr" ? `✎ ${modal.f.name}` : ""}</h3>
+            <button onClick={() => setModal(null)} style={{ background: BG, border: "1px solid #37474f", color: TD, cursor: "pointer", fontSize: 14, width: 24, height: 24, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+          </div>
+
+          {/* === ЯЧЕЙКА === */}
+          {(modal.type === "ac" || modal.type === "ec") && <>
+            {fld("Номер ячейки", modal.f.num, v => uf("num", v))}
+            {sel("Секция шин", modal.f.busId, v => uf("busId", v), d.buses.map(b => ({ v: b.id, l: b.name })))}
+            {sel("Тип ячейки", modal.f.type, v => uf("type", v), [
+              { v: "line", l: "Линейная (отходящая)" }, { v: "input", l: "Вводная" }, { v: "reserve", l: "Резервная" }])}
+            {modal.type === "ec" && <>
+              <div style={{ borderTop: "1px solid #263238", marginTop: 12, paddingTop: 10 }}>
+                <span style={{ fontSize: 8, color: TD }}>Подключённые кабели:</span>
+                {d.links.filter(l => (l.from.block === "cell" && l.from.id === modal.id) || (l.to.block === "cell" && l.to.id === modal.id)).map(l => (
+                  <div key={l.id} style={{ fontSize: 8, color: TXT, padding: "2px 0", display: "flex", alignItems: "center", gap: 4 }}>
+                    <span style={{ color: WC }}>●</span> {pKey(l.from)} → {pKey(l.to)}
+                    <button onClick={() => delLink(l.id)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8 }}>✕</button>
+                  </div>
+                ))}
+              </div>
+              {dangerBtn("🗑 Удалить ячейку и все связи", () => delCell(modal.id))}
+            </>}
+          </>}
+
+          {/* === ТП === */}
+          {modal.type === "etp" && <>
+            {fld("Название ТП", modal.f.name, v => uf("name", v))}
+            {sel("Тип ВВ аппарата", modal.f.rm6Type, v => uf("rm6Type", v), [
+              { v: "rm6", l: "RM6 (I-I-D) — кольцевая" }, { v: "vn", l: "ВН ячейка с выкл. нагрузки" }])}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 9, color: WC, fontWeight: 600 }}>Трансформатор</span></div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ flex: 1 }}>{fld("Мощность, кВА", modal.f.power, v => uf("power", v), "number", "1000")}</div>
+              <div style={{ flex: 1 }}>{fld("Номинал, кВА", modal.f.trNominal, v => uf("trNominal", v), "number", "1000")}</div>
+            </div>
+            {fld("Счётчик ВН (10кВ)", modal.f.meterHv, v => uf("meterHv", v), "text", "№ счётчика")}
+            {fld("Марка кабеля 10кВ", modal.f.cable10, v => uf("cable10", v), "text", "АСБЛ 3×240")}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8, marginBottom: 4 }}>
+              <span style={{ fontSize: 9, color: BUS, fontWeight: 600 }}>РУ-0.4 кВ</span></div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ flex: 1 }}>{fld("Ячеек 0.4кВ", modal.f.cells04, v => uf("cells04", v), "number", "12")}</div>
+              <div style={{ flex: 1 }}>{fld("Номинал яч., А", modal.f.cellNominal, v => uf("cellNominal", v), "number", "630")}</div>
+            </div>
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8 }}>
+              <span style={{ fontSize: 8, color: TD }}>Подключённые кабели 10кВ:</span>
+              {d.links.filter(l => (l.from.block === "tp" && l.from.id === modal.id) || (l.to.block === "tp" && l.to.id === modal.id)).map(l => (
+                <div key={l.id} style={{ fontSize: 8, color: TXT, padding: "2px 0", display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: WC }}>●</span> {pKey(l.from)} → {pKey(l.to)} {l.cable && <span style={{ color: TM }}>({l.cable})</span>}
+                  <button onClick={() => delLink(l.id)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {dangerBtn("🗑 Удалить ТП и все связи", () => delTP(modal.id))}
+          </>}
+
+          {/* === КРУН === */}
+          {modal.type === "ekr" && <>
+            {fld("Название КРУНа", modal.f.name, v => uf("name", v))}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 9, color: KR, fontWeight: 600 }}>Секции ({modal.f.sections.length}/4)</span></div>
+            {modal.f.sections.map((s, i) => (
+              <div key={i} style={{ display: "flex", gap: 4, marginBottom: 4, alignItems: "center" }}>
+                <span style={{ fontSize: 8, color: KR, width: 14 }}>{i + 1}.</span>
+                <input value={s.name} onChange={e => { const a = [...modal.f.sections]; a[i] = { ...a[i], name: e.target.value }; uf("sections", a); }}
+                  style={{ flex: 1, padding: 5, background: DK, border: "1px solid #263238", borderRadius: 3, color: TXT, fontFamily: FN, fontSize: 9, outline: "none" }} />
+                {modal.f.sections.length > 2 && <button onClick={() => uf("sections", modal.f.sections.filter((_, j) => j !== i))}
+                  style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 11 }}>✕</button>}
+              </div>
+            ))}
+            {modal.f.sections.length < 4 && <button onClick={() => uf("sections", [...modal.f.sections, { id: uid(), name: `С${modal.f.sections.length + 1}`, closed: true }])}
+              style={{ padding: "3px 8px", background: KR + "10", border: `1px solid ${KR}40`, borderRadius: 4, color: KR, fontFamily: FN, fontSize: 8, cursor: "pointer", marginTop: 4 }}>＋ Добавить секцию</button>}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 10, paddingTop: 8 }}>
+              <span style={{ fontSize: 8, color: TD }}>Подключённые кабели:</span>
+              {d.links.filter(l => (l.from.block === "krun" && l.from.id === modal.id) || (l.to.block === "krun" && l.to.id === modal.id)).map(l => (
+                <div key={l.id} style={{ fontSize: 8, color: TXT, padding: "2px 0", display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: KR }}>●</span> {pKey(l.from)} → {pKey(l.to)}
+                  <button onClick={() => delLink(l.id)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {dangerBtn("🗑 Удалить КРУН и все связи", () => delKR(modal.id))}
+          </>}
+
+          {/* === ЛР === */}
+          {modal.type === "elr" && <>
+            {fld("Название ЛР", modal.f.name, v => uf("name", v))}
+            {fld("Счётчик на ЛР", modal.f.meter, v => uf("meter", v), "text", "№ счётчика")}
+            <div style={{ borderTop: "1px solid #263238", marginTop: 8, paddingTop: 8 }}>
+              <span style={{ fontSize: 8, color: TD }}>Подключённые кабели:</span>
+              {d.links.filter(l => (l.from.block === "lr" && l.from.id === modal.id) || (l.to.block === "lr" && l.to.id === modal.id)).map(l => (
+                <div key={l.id} style={{ fontSize: 8, color: TXT, padding: "2px 0", display: "flex", alignItems: "center", gap: 4 }}>
+                  <span style={{ color: LRC }}>●</span> {pKey(l.from)} → {pKey(l.to)}
+                  <button onClick={() => delLink(l.id)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8 }}>✕</button>
+                </div>
+              ))}
+            </div>
+            {dangerBtn("🗑 Удалить ЛР и все связи", () => delLR(modal.id))}
+          </>}
+
+          {/* Save / Cancel */}
+          <div style={{ display: "flex", gap: 6, marginTop: 16, justifyContent: "flex-end" }}>
+            <button onClick={() => setModal(null)} style={{ padding: "4px 12px", background: "none", border: `1px solid ${TD}40`, borderRadius: 4, color: TD, fontFamily: FN, fontSize: 9, cursor: "pointer" }}>Отмена</button>
+            <button onClick={save} style={{ padding: "4px 12px", background: ON + "15", border: `1px solid ${ON}40`, borderRadius: 4, color: ON, fontFamily: FN, fontSize: 9, fontWeight: 600, cursor: "pointer" }}>💾 Сохранить</button>
+          </div>
+        </div>
+      </div>}
+    </div>
+  );
+}
