@@ -47,11 +47,16 @@ const INIT = {
     { id: "bus-rp", name: "РП-25", x: 100, y: 510, inputOn: true,
       feeders: [{ id: "f11", name: "Ф-11", closed: true }, { id: "f8", name: "Ф-8", closed: true }] }],
   inputBreakers: [
-    { id: "ib1", feedName: "Ф-213", busId: "bus-1", closed: true },
-    { id: "ib2", feedName: "Ф-313", busId: "bus-2", closed: true },
+    { id: "ib1", feedName: "Луч 1 (ПС-677)", busId: "bus-1", closed: true },
+    { id: "ib2", feedName: "Луч 2 (ПС-677)", busId: "bus-2", closed: true },
   ],
-  sectionBreakers: [{ id: "sv1", fromBus: "bus-1", toBus: "bus-2", closed: false, name: "СВ яч.5-6" }],
-  cells: [],
+  sectionBreakers: [{ id: "sv1", fromBus: "bus-1", toBus: "bus-2", closed: false, name: "СВ" }],
+  cells: [
+    { id: "c1", busId: "bus-1", num: "1", type: "line", closed: true },
+    { id: "c2", busId: "bus-1", num: "2", type: "line", closed: true },
+    { id: "c3", busId: "bus-2", num: "3", type: "line", closed: true },
+    { id: "c4", busId: "bus-2", num: "4", type: "line", closed: true },
+  ],
   lrs: [],
   kruns: [],
   tps: [],
@@ -183,8 +188,14 @@ function getPortPos(p, d) {
     return p.port === "a" ? { x: lr.x, y: lr.y + 14 } : { x: lr.x + 50, y: lr.y + 14 };
   }
   if (p.block === "cell") {
-    const cells = d.cells; const idx = cells.findIndex(c => c.id === p.id);
-    return { x: 50 + idx * 70 + 15, y: 105 };
+    const cell = d.cells.find(c => c.id === p.id); if (!cell) return null;
+    const s1cells = d.cells.filter(c => c.busId === "bus-1");
+    const s1w = Math.max(s1cells.length * 70 + 10, 100);
+    const s2start = 50 + s1w + 40;
+    const isS1 = cell.busId === "bus-1";
+    const idxInBus = d.cells.filter(c => c.busId === cell.busId).indexOf(cell);
+    const cx = isS1 ? 50 + idxInBus * 70 : s2start + idxInBus * 70;
+    return { x: cx + 15, y: 110 };
   }
   if (p.block === "bus") {
     const bus = d.buses.find(b => b.id === p.id);
@@ -545,17 +556,58 @@ export default function App() {
           <defs><pattern id="g" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0L0 0 0 30" fill="none" stroke="#162030" strokeWidth="0.3" /></pattern></defs>
           <rect width={CANVAS_W} height={CANVAS_H} fill="url(#g)" />
 
-          {/* Buses - scale to cells (Секция I, II) */}
+          {/* ПС-677 + РП-34 (Секции I, II) */}
           {(() => {
             const s1cells = d.cells.filter(c => c.busId === "bus-1").length;
-            const s2start = 50 + s1cells * 70 + 30;
+            const s1w = Math.max(s1cells * 70 + 10, 100);
+            const s2start = 50 + s1w + 40;
             const s2cells = d.cells.filter(c => c.busId === "bus-2").length;
+            const s2w = Math.max(s2cells * 70 + 10, 100);
+            const totalW = s2start + s2w - 30;
+            const centerX = (40 + totalW) / 2;
+            const ib1 = d.inputBreakers.find(b => b.busId === "bus-1");
+            const ib2 = d.inputBreakers.find(b => b.busId === "bus-2");
+            const ib1x = 40 + s1w / 2, ib2x = s2start + s2w / 2;
             return <>
-              <rect x={40} y={65} width={s1cells * 70 + 10} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
-              <text x={40 + (s1cells * 70) / 2} y={61} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={7} fontFamily={FN}>Секция I</text>
-              <rect x={s2start - 20} y={65} width={20} height={4} rx={1} fill={d.sectionBreakers[0]?.closed ? BUS : BUSOFF} />
-              <rect x={s2start} y={65} width={s2cells * 70 + 10} height={4} rx={1} fill={s2 ? BUS : BUSOFF} />
-              <text x={s2start + (s2cells * 70) / 2} y={61} textAnchor="middle" fill={s2 ? BUS : TD} fontSize={7} fontFamily={FN}>Секция II</text>
+              {/* ПС-677 block */}
+              <rect x={centerX - 50} y={4} width={100} height={22} rx={5}
+                fill="#1a1a08" stroke={BUS + "60"} strokeWidth={1.2} />
+              <text x={centerX} y={19} textAnchor="middle" fill={BUS}
+                fontSize={9} fontWeight="bold" fontFamily={FN}>ПС-677</text>
+
+              {/* Луч 1 → Секция I */}
+              <line x1={centerX - 20} y1={26} x2={ib1x} y2={38} stroke={ib1?.closed && s1 ? BUS : BUSOFF} strokeWidth={1.5} />
+              <text x={ib1x} y={36} textAnchor="middle" fill={ib1?.closed ? BUS : TD} fontSize={5} fontFamily={FN}>Луч 1</text>
+              <Sw x={ib1x} y={50} on={ib1?.closed} onClick={() => ib1 && togIB(ib1.id)} sz={11} />
+              <line x1={ib1x} y1={56} x2={ib1x} y2={65} stroke={s1 ? BUS : BUSOFF} strokeWidth={1.5} />
+
+              {/* Луч 2 → Секция II */}
+              <line x1={centerX + 20} y1={26} x2={ib2x} y2={38} stroke={ib2?.closed && s2 ? BUS : BUSOFF} strokeWidth={1.5} />
+              <text x={ib2x} y={36} textAnchor="middle" fill={ib2?.closed ? BUS : TD} fontSize={5} fontFamily={FN}>Луч 2</text>
+              <Sw x={ib2x} y={50} on={ib2?.closed} onClick={() => ib2 && togIB(ib2.id)} sz={11} />
+              <line x1={ib2x} y1={56} x2={ib2x} y2={65} stroke={s2 ? BUS : BUSOFF} strokeWidth={1.5} />
+
+              {/* РП-34 title */}
+              <text x={centerX} y={60} textAnchor="middle" fill={s1 || s2 ? "#4fc3f7" : TD}
+                fontSize={7} fontFamily={FN}>РП-34</text>
+
+              {/* Секция I bus */}
+              <rect x={40} y={65} width={s1w} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
+              <text x={40 + s1w / 2} y={75} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция I</text>
+
+              {/* Секционник */}
+              {(() => {
+                const sv = d.sectionBreakers[0];
+                const svX = 40 + s1w + 10;
+                return <g>
+                  <rect x={svX} y={65} width={20} height={4} rx={1} fill={sv?.closed ? BUS : BUSOFF} />
+                  <Sw x={svX + 10} y={67} on={sv?.closed} onClick={() => sv && togSB(sv.id)} sz={9} />
+                </g>;
+              })()}
+
+              {/* Секция II bus */}
+              <rect x={s2start} y={65} width={s2w} height={4} rx={1} fill={s2 ? BUS : BUSOFF} />
+              <text x={s2start + s2w / 2} y={75} textAnchor="middle" fill={s2 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция II</text>
             </>;
           })()}
 
@@ -616,8 +668,14 @@ export default function App() {
           })}
 
           {/* Cells */}
-          {d.cells.map((cell, idx) => {
-            const cx = 50 + idx * 70; const cy = 75;
+          {d.cells.map((cell) => {
+            const s1cells = d.cells.filter(c => c.busId === "bus-1");
+            const s1w = Math.max(s1cells.length * 70 + 10, 100);
+            const s2start = 50 + s1w + 40;
+            const isS1 = cell.busId === "bus-1";
+            const idxInBus = d.cells.filter(c => c.busId === cell.busId).indexOf(cell);
+            const cx = isS1 ? 50 + idxInBus * 70 : s2start + idxInBus * 70;
+            const cy = 80;
             const bOn = busOn(cell.busId, d); const on = bOn && cell.closed;
             const isRes = cell.type === "reserve";
             return (<g key={cell.id}>
