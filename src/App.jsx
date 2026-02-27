@@ -188,13 +188,14 @@ function getPortPos(p, d) {
     return p.port === "a" ? { x: lr.x, y: lr.y + 14 } : { x: lr.x + 50, y: lr.y + 14 };
   }
   if (p.block === "cell") {
+    const BX = 100;
     const cell = d.cells.find(c => c.id === p.id); if (!cell) return null;
     const s1cells = d.cells.filter(c => c.busId === "bus-1");
     const s1w = Math.max(s1cells.length * 70 + 10, 100);
-    const s2start = 50 + s1w + 40;
+    const s2start = BX + 10 + s1w + 40;
     const isS1 = cell.busId === "bus-1";
     const idxInBus = d.cells.filter(c => c.busId === cell.busId).indexOf(cell);
-    const cx = isS1 ? 50 + idxInBus * 70 : s2start + idxInBus * 70;
+    const cx = isS1 ? BX + 10 + idxInBus * 70 : s2start + idxInBus * 70;
     return { x: cx + 15, y: 110 };
   }
   if (p.block === "bus") {
@@ -453,8 +454,16 @@ export default function App() {
     // Include RP-25 block
     const rpBus = d.buses.find(b => b.id === "bus-rp");
     if (rpBus?.x != null) { minX = Math.min(minX, rpBus.x - 10); minY = Math.min(minY, rpBus.y - 50); maxX = Math.max(maxX, rpBus.x + 210); maxY = Math.max(maxY, rpBus.y + 40); }
-    minX = Math.min(minX, 30); minY = Math.min(minY, 50);
-    maxX = Math.max(maxX, d.cells.length * 70 + 100);
+    // Include ПС-677 + РП-34 bus area (BX=100 base offset)
+    const BX_fit = 100;
+    const s1cells_fit = d.cells.filter(c => c.busId === "bus-1").length;
+    const s1w_fit = Math.max(s1cells_fit * 70 + 10, 100);
+    const s2start_fit = BX_fit + 10 + s1w_fit + 40;
+    const s2cells_fit = d.cells.filter(c => c.busId === "bus-2").length;
+    const s2w_fit = Math.max(s2cells_fit * 70 + 10, 100);
+    const totalW_fit = s2start_fit + s2w_fit;
+    minX = Math.min(minX, BX_fit - 10); minY = Math.min(minY, 0);
+    maxX = Math.max(maxX, totalW_fit + 20);
     if (minX === Infinity) return resetView();
     const rect = containerRef.current?.getBoundingClientRect();
     if (!rect) return resetView();
@@ -558,16 +567,17 @@ export default function App() {
 
           {/* ПС-677 + РП-34 (Секции I, II) */}
           {(() => {
+            const BX = 100; // base X offset
             const s1cells = d.cells.filter(c => c.busId === "bus-1").length;
             const s1w = Math.max(s1cells * 70 + 10, 100);
-            const s2start = 50 + s1w + 40;
+            const s2start = BX + 10 + s1w + 40;
             const s2cells = d.cells.filter(c => c.busId === "bus-2").length;
             const s2w = Math.max(s2cells * 70 + 10, 100);
-            const totalW = s2start + s2w - 30;
-            const centerX = (40 + totalW) / 2;
+            const totalW = s2start + s2w;
+            const centerX = (BX + totalW) / 2;
             const ib1 = d.inputBreakers.find(b => b.busId === "bus-1");
             const ib2 = d.inputBreakers.find(b => b.busId === "bus-2");
-            const ib1x = 40 + s1w / 2, ib2x = s2start + s2w / 2;
+            const ib1x = BX + s1w / 2, ib2x = s2start + s2w / 2;
             return <>
               {/* ПС-677 block */}
               <rect x={centerX - 50} y={4} width={100} height={22} rx={5}
@@ -592,13 +602,13 @@ export default function App() {
                 fontSize={7} fontFamily={FN}>РП-34</text>
 
               {/* Секция I bus */}
-              <rect x={40} y={65} width={s1w} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
-              <text x={40 + s1w / 2} y={75} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция I</text>
+              <rect x={BX} y={65} width={s1w} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
+              <text x={BX + s1w / 2} y={75} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={6} fontFamily={FN}>Секция I</text>
 
               {/* Секционник */}
               {(() => {
                 const sv = d.sectionBreakers[0];
-                const svX = 40 + s1w + 10;
+                const svX = BX + s1w + 10;
                 return <g>
                   <rect x={svX} y={65} width={20} height={4} rx={1} fill={sv?.closed ? BUS : BUSOFF} />
                   <Sw x={svX + 10} y={67} on={sv?.closed} onClick={() => sv && togSB(sv.id)} sz={9} />
@@ -669,12 +679,13 @@ export default function App() {
 
           {/* Cells */}
           {d.cells.map((cell) => {
+            const BX = 100;
             const s1cells = d.cells.filter(c => c.busId === "bus-1");
             const s1w = Math.max(s1cells.length * 70 + 10, 100);
-            const s2start = 50 + s1w + 40;
+            const s2start = BX + 10 + s1w + 40;
             const isS1 = cell.busId === "bus-1";
             const idxInBus = d.cells.filter(c => c.busId === cell.busId).indexOf(cell);
-            const cx = isS1 ? 50 + idxInBus * 70 : s2start + idxInBus * 70;
+            const cx = isS1 ? BX + 10 + idxInBus * 70 : s2start + idxInBus * 70;
             const cy = 80;
             const bOn = busOn(cell.busId, d); const on = bOn && cell.closed;
             const isRes = cell.type === "reserve";
