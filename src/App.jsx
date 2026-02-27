@@ -240,7 +240,10 @@ function getPortPos(p, d) {
     const cells = d.cells; const idx = cells.findIndex(c => c.id === p.id);
     return { x: 50 + idx * 70 + 15, y: 105 };
   }
-  if (p.block === "bus") return { x: 780, y: 105 };
+  if (p.block === "bus") {
+    if (p.id === "bus-rp") return { x: 200, y: 536 }; // РП-25 output port position
+    return { x: 780, y: 105 };
+  }
   return null;
 }
 
@@ -585,21 +588,56 @@ export default function App() {
           <defs><pattern id="g" width="30" height="30" patternUnits="userSpaceOnUse"><path d="M30 0L0 0 0 30" fill="none" stroke="#162030" strokeWidth="0.3" /></pattern></defs>
           <rect width={CANVAS_W} height={CANVAS_H} fill="url(#g)" />
 
-          {/* Buses - scale to cells */}
+          {/* Buses - scale to cells (Секция I, II) */}
           {(() => {
             const s1cells = d.cells.filter(c => c.busId === "bus-1").length;
             const s2start = 50 + s1cells * 70 + 30;
             const s2cells = d.cells.filter(c => c.busId === "bus-2").length;
-            const rpStart = s2start + s2cells * 70 + 30;
             return <>
               <rect x={40} y={65} width={s1cells * 70 + 10} height={4} rx={1} fill={s1 ? BUS : BUSOFF} />
               <text x={40 + (s1cells * 70) / 2} y={61} textAnchor="middle" fill={s1 ? BUS : TD} fontSize={7} fontFamily={FN}>Секция I</text>
               <rect x={s2start - 20} y={65} width={20} height={4} rx={1} fill={d.sectionBreakers[0]?.closed ? BUS : BUSOFF} />
               <rect x={s2start} y={65} width={s2cells * 70 + 10} height={4} rx={1} fill={s2 ? BUS : BUSOFF} />
               <text x={s2start + (s2cells * 70) / 2} y={61} textAnchor="middle" fill={s2 ? BUS : TD} fontSize={7} fontFamily={FN}>Секция II</text>
-              <rect x={rpStart} y={65} width={80} height={4} rx={1} fill={rp ? WC : WO} />
-              <text x={rpStart + 40} y={61} textAnchor="middle" fill={rp ? WC : TD} fontSize={6} fontFamily={FN}>РП-25</text>
             </>;
+          })()}
+
+          {/* РП-25 — отдельный блок внизу с двумя независимыми вводами */}
+          {(() => {
+            const rpX = 100, rpY = 510, rpW = 200;
+            const rpIBs = d.inputBreakers.filter(ib => ib.busId === "bus-rp");
+            const rpOn = busOn("bus-rp", d);
+            return (
+              <g>
+                {/* Background */}
+                <rect x={rpX - 10} y={rpY - 45} width={rpW + 20} height={85} rx={6}
+                  fill={rpOn ? "#0a1a1a" : "#121212"} stroke={rpOn ? WC + "40" : "#26323850"} strokeWidth={1.2} />
+                {/* Title */}
+                <text x={rpX + rpW / 2} y={rpY - 50} textAnchor="middle" fill={rpOn ? WC : TD}
+                  fontSize={10} fontWeight="bold" fontFamily={FN}>РП-25</text>
+                {/* Bus bar */}
+                <rect x={rpX} y={rpY} width={rpW} height={4} rx={1} fill={rpOn ? WC : WO}
+                  style={rpOn ? { filter: `drop-shadow(0 0 4px ${WC}40)` } : {}} />
+                {/* Input feeders */}
+                {rpIBs.map((ib, i) => {
+                  const fx = rpX + 50 + i * 100;
+                  const ibOn = ib.closed && rpOn;
+                  return (
+                    <g key={ib.id}>
+                      <text x={fx} y={rpY - 32} textAnchor="middle" fill={ib.closed ? WC : TD} fontSize={7} fontWeight="bold" fontFamily={FN}>{ib.feedName}</text>
+                      <line x1={fx} y1={rpY - 26} x2={fx} y2={rpY - 14} stroke={ib.closed ? WC : WO} strokeWidth={1.5} />
+                      <Sw x={fx} y={rpY - 8} on={ib.closed} onClick={() => togIB(ib.id)} sz={11} />
+                      <line x1={fx} y1={rpY - 2} x2={fx} y2={rpY} stroke={ib.closed ? WC : WO} strokeWidth={1.5} />
+                      <text x={fx} y={rpY + 16} textAnchor="middle" fill={ibOn ? WC : TM} fontSize={5} fontFamily={FN}>
+                        {ib.feedName === "Ф-11" ? "Ввод I" : "Ввод II"}</text>
+                    </g>
+                  );
+                })}
+                {/* Output port */}
+                <line x1={rpX + rpW / 2} y1={rpY + 4} x2={rpX + rpW / 2} y2={rpY + 22} stroke={rpOn ? WC : WO} strokeWidth={1.5} />
+                <Port x={rpX + rpW / 2} y={rpY + 26} on={rpOn} label="вых" portRef={{ block: "bus", id: "bus-rp", port: "out" }} />
+              </g>
+            );
           })()}
 
           {/* Cables (behind blocks) */}
