@@ -6,7 +6,7 @@ import {
   uid, STUB, orthoPath, findWpInsertIdx,
   Sw, Port, inpS, lblS, fld, sel, dangerBtn
 } from "./shared";
-import { SLD_SYMBOLS } from "./symbols";
+import { SLD_SYMBOLS, getSymbolPortPos } from "./symbols";
 import { SldPalette, SldCanvas, computeSldEnergy } from "./SldEditor";
 
 const PW = 180, CANVAS_W = 4000, CANVAS_H = 3000;
@@ -270,6 +270,16 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
   };
 
   const linkPortPos = (ref, isFrom) => {
+    // SLD element port — resolve via panel offset + element position
+    if (ref.sldElemId && ref.sldPortId && ref.panelId) {
+      const pnl = panels.find(p => p.id === ref.panelId);
+      if (!pnl?.sld) return null;
+      const elem = pnl.sld.elements.find(e => e.id === ref.sldElemId);
+      if (!elem) return null;
+      const pos = getSymbolPortPos(elem, ref.sldPortId);
+      if (!pos) return null;
+      return { x: pos.x + pnl.x, y: pos.y + pnl.y };
+    }
     if (isFrom) {
       if (!ref.panelId) {
         const fi = feeders.findIndex(f => f.id === ref.breakerId);
@@ -284,8 +294,17 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
     return pnl ? panelInPos(pnl) : null;
   };
 
-  const linkFromDir = () => "d";
-  const linkToDir = () => "u";
+  const getLinkDir = (ref, defaultDir) => {
+    if (ref.sldElemId && ref.sldPortId && ref.panelId) {
+      const pnl = panels.find(p => p.id === ref.panelId);
+      const elem = pnl?.sld?.elements?.find(e => e.id === ref.sldElemId);
+      if (elem) {
+        const pos = getSymbolPortPos(elem, ref.sldPortId);
+        if (pos) return pos.dir;
+      }
+    }
+    return defaultDir;
+  };
 
   // ═══ FEEDER ENERGIZED ═══
   const feederOn = f => busOn04(f.section) && f.closed;
@@ -365,7 +384,18 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
     if (!connecting) { setConnecting(ref); return; }
     // connecting → ref: create link
     if (ref.type === "panelIn") {
-      const lk = { id: uid(), from: { panelId: connecting.panelId || null, breakerId: connecting.breakerId }, to: { panelId: ref.panelId }, waypoints: [] };
+      const lk = {
+        id: uid(),
+        from: {
+          panelId: connecting.panelId || null, breakerId: connecting.breakerId,
+          ...(connecting.sldElemId && { sldElemId: connecting.sldElemId, sldPortId: connecting.sldPortId }),
+        },
+        to: {
+          panelId: ref.panelId,
+          ...(ref.sldElemId && { sldElemId: ref.sldElemId, sldPortId: ref.sldPortId }),
+        },
+        waypoints: []
+      };
       setP04(prev => ({ ...prev, links04: [...prev.links04, lk] }));
       log(`0.4: соединение → РЩ`);
     }
@@ -814,7 +844,8 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
             if (!fp || !tp2) return null;
             const on = linkOn(lk);
             const wps = lk.waypoints || [];
-            const pathD = orthoPath(fp.x, fp.y, "d", tp2.x, tp2.y, "u", wps);
+            const fromDir = getLinkDir(lk.from, "d"), toDir = getLinkDir(lk.to, "u");
+            const pathD = orthoPath(fp.x, fp.y, fromDir, tp2.x, tp2.y, toDir, wps);
             const mx = (fp.x + tp2.x) / 2, my = (fp.y + tp2.y) / 2;
             const isSel = selLink === lk.id;
             // Find cable info
@@ -949,7 +980,39 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
                 </g>;
               })}
 
-              {/* Panel SLD indicator + edit button */}
+              {/* Panel SLD on main canvas */}
+              {(() => {
+                const pSld = pnl.sld;
+                const hasPnlSld = pSld?.elements?.length > 0;
+                if (hasPnlSld) {
+                  const pEnergized = computeSldEnergy(pSld);
+                  return <g>
+                    <SldCanvas sld={pSld} energized={pEnergized} feeders={feeders}
+                      connecting={connecting} setConnecting={setConnecting}
+                      offsetX={pnl.x} offsetY={pnl.y}
+                      onElemClick={id => { const el = pSld.elements.find(ee => ee.id === id); if (el && SLD_SYMBOLS[el.type]?.switchable) toggleSldElem(id, pnl.id); }}
+                      onElemDblClick={id => openSldElemEditor(id, pnl.id)}
+                      onPortClick={(eId, pId) => {
+                        // SLD ports participate in the main link system
+                        const el = pSld.elements.find(ee => ee.id === eId);
+                        if (!el) return;
+                        const sym = SLD_SYMBOLS[el.type];
+                        const port = sym?.ports.find(pp => pp.id === pId);
+                        if (!port) return;
+                        // Port pointing up/left = input to panel, down/right = output from panel
+                        if (port.dir === "u" || port.dir === "l") {
+                          onPortClick({ panelId: pnl.id, type: "panelIn", sldElemId: eId, sldPortId: pId });
+                        } else {
+                          onPortClick({ panelId: pnl.id, breakerId: eId, type: "breakerOut", sldElemId: eId, sldPortId: pId });
+                        }
+                      }}
+                      onElemDragStart={(e, id) => startDrag(e, "sldElem", id, { panelId: pnl.id })} />
+                  </g>;
+                }
+                return null;
+              })()}
+
+              {/* Panel SLD edit button */}
               {(() => {
                 const hasPnlSld = pnl.sld?.elements?.length > 0;
                 return <g onClick={e => { e.stopPropagation(); setSldEditor({ panelId: pnl.id }); setPlacingType(null); setConnecting(null); }}
@@ -967,7 +1030,17 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
           {connecting && (() => {
             // Show a dashed line from the connecting source to the cursor area
             let fromPos = null;
-            if (connecting.type === "feederOut") {
+            if (connecting.sldElemId && connecting.sldPortId && connecting.panelId) {
+              // SLD element port
+              const cpnl = panels.find(p => p.id === connecting.panelId);
+              if (cpnl?.sld) {
+                const celem = cpnl.sld.elements.find(e => e.id === connecting.sldElemId);
+                if (celem) {
+                  const cpos = getSymbolPortPos(celem, connecting.sldPortId);
+                  if (cpos) fromPos = { x: cpos.x + cpnl.x, y: cpos.y + cpnl.y };
+                }
+              }
+            } else if (connecting.type === "feederOut") {
               const fi = feeders.findIndex(f => f.id === connecting.breakerId);
               if (fi >= 0) fromPos = feederPortPos(fi);
             } else if (connecting.type === "breakerOut") {
@@ -976,6 +1049,8 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
                 const bi = pnl.outBreakers.findIndex(b => b.id === connecting.breakerId);
                 if (bi >= 0) fromPos = panelOutPos(pnl, bi);
               }
+            } else if (connecting.type === "panelIn" && connecting.panelId) {
+              fromPos = panelInPos(panels.find(p => p.id === connecting.panelId));
             }
             if (!fromPos) return null;
             return <circle cx={fromPos.x} cy={fromPos.y + 15} r={4} fill="none" stroke="#ff0" strokeWidth={1} strokeDasharray="3" opacity={0.6}>

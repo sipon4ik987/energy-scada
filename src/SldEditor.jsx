@@ -65,13 +65,14 @@ export function SldPalette({ placingType, setPlacingType }) {
 // ═══ SLD CANVAS ═══
 export function SldCanvas({
   sld, energized, feeders, connecting, setConnecting,
-  onElemClick, onElemDblClick, onPortClick, onElemDragStart
+  onElemClick, onElemDblClick, onPortClick, onElemDragStart,
+  offsetX = 0, offsetY = 0
 }) {
   if (!sld) return null;
   const elements = sld.elements || [];
   const wires = sld.wires || [];
 
-  return <g>
+  return <g transform={offsetX || offsetY ? `translate(${offsetX},${offsetY})` : undefined}>
     {/* Wires */}
     {wires.map(w => {
       const fromElem = elements.find(e => e.id === w.from.elementId);
