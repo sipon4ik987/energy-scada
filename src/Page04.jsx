@@ -21,6 +21,8 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
   const [placingType, setPlacingType] = useState(null);
   const [editSldElem, setEditSldElem] = useState(null);
   const [sldTarget, setSldTarget] = useState(null); // null = main canvas, panelId = that panel
+  const [sldEditor, setSldEditor] = useState(null); // { panelId } — inline SLD editor for a panel
+  const sldEditorSvgRef = useRef(null);
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
   const [panning, setPanning] = useState(null);
   const svgRef = useRef(null);
@@ -407,20 +409,28 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
     return pt.matrixTransform(svg.getScreenCTM().inverse());
   };
 
+  const clientToEditorSvg = (cx, cy) => {
+    const svg = sldEditorSvgRef.current; if (!svg) return null;
+    const pt = svg.createSVGPoint(); pt.x = cx; pt.y = cy;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  };
+
   // ═══ DRAG ═══
   const startDrag = (e, type, id, extra) => {
     if (e.button !== 0 || connecting || e.altKey) return;
     if (e.defaultPrevented) return;
-    const svg = svgRef.current; if (!svg) return;
-    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
-    const sp = pt.matrixTransform(svg.getScreenCTM().inverse());
+    const useSvg = type === "sldEditorElem" ? sldEditorSvgRef.current : svgRef.current;
+    if (!useSvg) return;
+    const pt = useSvg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const sp = pt.matrixTransform(useSvg.getScreenCTM().inverse());
     setDrag({ type, id, sx: sp.x, sy: sp.y, ...extra }); e.preventDefault();
   };
   const onMM = useCallback(e => {
     if (!drag) return;
-    const svg = svgRef.current; if (!svg) return;
-    const pt = svg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
-    const ctm = svg.getScreenCTM(); if (!ctm) return;
+    const useSvg = drag.type === "sldEditorElem" ? sldEditorSvgRef.current : svgRef.current;
+    if (!useSvg) return;
+    const pt = useSvg.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
+    const ctm = useSvg.getScreenCTM(); if (!ctm) return;
     const sp = pt.matrixTransform(ctm.inverse());
     const dx = sp.x - drag.sx, dy = sp.y - drag.sy;
     if (drag.type === "panel") {
@@ -428,6 +438,8 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
     } else if (drag.type === "sldElem") {
       const fn = s => ({ ...s, elements: s.elements.map(e => e.id === drag.id ? { ...e, x: e.x + dx, y: e.y + dy } : e) });
       if (drag.panelId) setPanelSld(drag.panelId, fn); else setSld(fn);
+    } else if (drag.type === "sldEditorElem") {
+      setPanelSld(drag.panelId, s => ({ ...s, elements: s.elements.map(el => el.id === drag.id ? { ...el, x: el.x + dx, y: el.y + dy } : el) }));
     } else if (drag.type === "wp04") {
       setP04(prev => ({
         ...prev, links04: prev.links04.map(l => {
@@ -509,16 +521,12 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
         </div>
         <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
           <SldPalette placingType={placingType} setPlacingType={setPlacingType} />
-          {sldTarget && <span style={{ fontSize: 8, color: BUS, background: BUS + "15", padding: "1px 6px", borderRadius: 3, border: `1px solid ${BUS}40` }}>
-            ОЛС: {panels.find(p => p.id === sldTarget)?.name || "?"}
-            <button onClick={() => setSldTarget(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
-          </span>}
           {connecting && <span style={{ fontSize: 8, color: "#ff0", background: "#332800", padding: "1px 6px", borderRadius: 3, border: "1px solid #ff0" }}>
             {connecting.sldPort ? "Выбери порт SLD..." : "Выбери вторую точку..."}
             <button onClick={() => setConnecting(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
           </span>}
-          {placingType && <span style={{ fontSize: 8, color: WC, background: WC + "15", padding: "1px 6px", borderRadius: 3, border: `1px solid ${WC}40` }}>
-            Кликни на канвас для размещения «{SLD_SYMBOLS[placingType]?.label}»{sldTarget ? ` в ${panels.find(p => p.id === sldTarget)?.name}` : ""}
+          {placingType && !sldEditor && <span style={{ fontSize: 8, color: WC, background: WC + "15", padding: "1px 6px", borderRadius: 3, border: `1px solid ${WC}40` }}>
+            Кликни на канвас для размещения «{SLD_SYMBOLS[placingType]?.label}»
             <button onClick={() => setPlacingType(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
           </span>}
           <button onClick={addFeeder} style={{ padding: "1px 6px", borderRadius: 2, background: BUS + "10", border: `1px solid ${BUS}40`, color: BUS, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ Фидер</button>
@@ -804,12 +812,12 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
               </g>}
 
               {/* Panel SLD edit button */}
-              <g onClick={e => { e.stopPropagation(); setSldTarget(sldTarget === pnl.id ? null : pnl.id); }}
+              <g onClick={e => { e.stopPropagation(); setSldEditor({ panelId: pnl.id }); setPlacingType(null); setConnecting(null); }}
                 style={{ cursor: "pointer" }}>
                 <rect x={pnl.x + PW - 24} y={pnl.y + 6} width={20} height={12} rx={2}
-                  fill={sldTarget === pnl.id ? WC + "30" : "#0a0f16"} stroke={sldTarget === pnl.id ? WC : "#263238"} strokeWidth={0.8} />
+                  fill={"#0a0f16"} stroke={"#263238"} strokeWidth={0.8} />
                 <text x={pnl.x + PW - 14} y={pnl.y + 14.5} textAnchor="middle"
-                  fill={sldTarget === pnl.id ? WC : TD} fontSize={5} fontFamily={FN}>ОЛС</text>
+                  fill={TD} fontSize={5} fontFamily={FN}>ОЛС</text>
               </g>
             </g>;
           })}
@@ -928,6 +936,81 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
           </div>
         </div>
       </div>}
+
+      {/* ═══ INLINE SLD EDITOR ═══ */}
+      {sldEditor && (() => {
+        const ePnl = panels.find(p => p.id === sldEditor.panelId);
+        if (!ePnl) return null;
+        const eSld = ePnl.sld || { elements: [], wires: [] };
+        const eEnergized = computeSldEnergy(eSld);
+        const SLD_W = 1200, SLD_H = 800;
+        return <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+          onClick={() => setSldEditor(null)}>
+          <div style={{ background: DK, border: `1px solid ${WC}40`, borderRadius: 10, width: "90vw", height: "85vh", display: "flex", flexDirection: "column", overflow: "hidden" }}
+            onClick={e => e.stopPropagation()}>
+            {/* Editor header */}
+            <div style={{ padding: "6px 12px", borderBottom: `1px solid ${WC}30`, display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 6 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span style={{ fontSize: 12, fontWeight: 800, color: WC, fontFamily: FN }}>ОЛС</span>
+                <span style={{ fontSize: 10, color: BUS, fontFamily: FN }}>{ePnl.name}</span>
+                {ePnl.location && <span style={{ fontSize: 8, color: TM, fontFamily: FN }}>{ePnl.location}</span>}
+              </div>
+              <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
+                <SldPalette placingType={placingType} setPlacingType={setPlacingType} />
+                {connecting?.sldPort && <span style={{ fontSize: 8, color: "#ff0", background: "#332800", padding: "1px 6px", borderRadius: 3, border: "1px solid #ff0" }}>
+                  Выбери порт...
+                  <button onClick={() => setConnecting(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
+                </span>}
+                {placingType && <span style={{ fontSize: 8, color: WC, background: WC + "15", padding: "1px 6px", borderRadius: 3, border: `1px solid ${WC}40` }}>
+                  Кликни для размещения «{SLD_SYMBOLS[placingType]?.label}»
+                  <button onClick={() => setPlacingType(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
+                </span>}
+              </div>
+              <button onClick={() => { setSldEditor(null); setPlacingType(null); setConnecting(null); }}
+                style={{ background: BG, border: "1px solid #37474f", color: TD, cursor: "pointer", fontSize: 14, width: 28, height: 28, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center" }}>✕</button>
+            </div>
+
+            {/* Editor canvas */}
+            <div style={{ flex: 1, overflow: "auto", background: `radial-gradient(ellipse at 50% 20%, #111a24 0%, ${DK} 70%)` }}>
+              <svg ref={sldEditorSvgRef} width={SLD_W} height={SLD_H} viewBox={`0 0 ${SLD_W} ${SLD_H}`}
+                style={{ display: "block", minWidth: SLD_W, minHeight: SLD_H }}>
+                <defs>
+                  <pattern id="gSldEd" width="20" height="20" patternUnits="userSpaceOnUse">
+                    <path d="M20 0L0 0 0 20" fill="none" stroke="#162030" strokeWidth="0.3" />
+                  </pattern>
+                </defs>
+                <rect width={SLD_W} height={SLD_H} fill="url(#gSldEd)"
+                  onClick={e => {
+                    if (!placingType) return;
+                    const sp = clientToEditorSvg(e.clientX, e.clientY); if (!sp) return;
+                    const sym = SLD_SYMBOLS[placingType]; if (!sym) return;
+                    const el = { id: uid(), type: placingType, x: sp.x, y: sp.y, label: sym.label, on: !!sym.switchable, params: { ...sym.defaultParams }, feederLink: null };
+                    setPanelSld(sldEditor.panelId, s => ({ ...s, elements: [...s.elements, el] }));
+                  }}
+                  style={placingType ? { cursor: "crosshair" } : {}} />
+
+                {/* Panel info label */}
+                <text x={SLD_W / 2} y={20} textAnchor="middle" fill={WC} fontSize={11} fontWeight="bold" fontFamily={FN}>
+                  {ePnl.name}{ePnl.location ? ` — ${ePnl.location}` : ""}
+                </text>
+
+                {/* SLD Canvas */}
+                <SldCanvas sld={eSld} energized={eEnergized} feeders={feeders}
+                  connecting={connecting} setConnecting={setConnecting}
+                  onElemClick={id => { const el = eSld.elements.find(ee => ee.id === id); if (el && SLD_SYMBOLS[el.type]?.switchable) toggleSldElem(id, sldEditor.panelId); }}
+                  onElemDblClick={id => openSldElemEditor(id, sldEditor.panelId)}
+                  onPortClick={(eId, pId) => onSldPortClick(eId, pId, sldEditor.panelId)}
+                  onElemDragStart={(e, id) => startDrag(e, "sldEditorElem", id, { panelId: sldEditor.panelId })} />
+              </svg>
+            </div>
+
+            {/* Editor footer hint */}
+            <div style={{ padding: "4px 12px", borderTop: "1px solid #162030", fontSize: 7, color: TM, fontFamily: FN }}>
+              Клик: переключить · 2×клик: редактировать · Тяни: двигать · Палитра → клик: разместить · Порт → порт: провод
+            </div>
+          </div>
+        </div>;
+      })()}
 
       {/* ═══ SLD ELEMENT EDIT MODAL ═══ */}
       {editSldElem && <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,.75)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }} onClick={() => setEditSldElem(null)}>
