@@ -10,8 +10,8 @@ import { SLD_SYMBOLS, getSymbolPortPos } from "./symbols";
 import { SldPalette, SldCanvas, computeSldEnergy } from "./SldEditor";
 
 const PW = 180, CANVAS_W = 4000, CANVAS_H = 3000;
-const BUS04_Y = 90, FEEDER_SP = 60;
-const pnlH = n => 60 + Math.max(n, 1) * 22;
+const BUS04_Y = 90, FEEDER_SP = 60, CARD_H = 50;
+const pnlH = () => CARD_H + 10;
 const SLD_W = 2000, SLD_H = 1500;
 
 // ═══ SLD EDITOR OVERLAY COMPONENT ═══
@@ -261,13 +261,7 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
 
   const panelInPos = pnl => ({ x: pnl.x + PW / 2, y: pnl.y });
 
-  const panelOutPos = (pnl, bIdx) => {
-    const n = pnl.outBreakers.length;
-    const h = pnlH(n);
-    const sp = n > 1 ? Math.min(40, (PW - 40) / (n - 1)) : 0;
-    const sx = pnl.x + PW / 2 - (n - 1) * sp / 2;
-    return { x: sx + bIdx * sp, y: pnl.y + h };
-  };
+  const panelOutPos = (pnl) => ({ x: pnl.x + PW / 2, y: pnl.y + CARD_H + 10 });
 
   const linkPortPos = (ref, isFrom) => {
     // SLD element port — resolve via panel offset + element position
@@ -288,7 +282,7 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
       const pnl = panels.find(p => p.id === ref.panelId);
       if (!pnl) return null;
       const bi = pnl.outBreakers.findIndex(b => b.id === ref.breakerId);
-      return bi >= 0 ? panelOutPos(pnl, bi) : null;
+      return bi >= 0 ? panelOutPos(pnl) : null;
     }
     const pnl = panels.find(p => p.id === ref.panelId);
     return pnl ? panelInPos(pnl) : null;
@@ -668,7 +662,7 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
     // Bus
     minX = Math.min(minX, busX - 20); minY = Math.min(minY, 10); maxX = Math.max(maxX, busX + busW + 20); maxY = Math.max(maxY, FEEDER_PORT_Y + 20);
     // Panels
-    panels.forEach(p => { minX = Math.min(minX, p.x - 10); minY = Math.min(minY, p.y - 20); maxX = Math.max(maxX, p.x + PW + 10); maxY = Math.max(maxY, p.y + pnlH(p.outBreakers.length) + 20); });
+    panels.forEach(p => { minX = Math.min(minX, p.x - 10); minY = Math.min(minY, p.y - 20); maxX = Math.max(maxX, p.x + PW + 10); maxY = Math.max(maxY, p.y + pnlH() + 20); });
     if (minX === Infinity) return setView({ x: 0, y: 0, zoom: 1 });
     const rect = containerRef.current?.getBoundingClientRect(); if (!rect) return;
     const pad = 40, bw = maxX - minX + pad * 2, bh = maxY - minY + pad * 2;
@@ -890,14 +884,10 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
             </g>;
           })}
 
-          {/* ═══ PANELS (РЩ) ═══ */}
+          {/* ═══ PANELS (РЩ) — compact cards ═══ */}
           {panels.map(pnl => {
-            const n = pnl.outBreakers.length;
-            const h = pnlH(n);
             const on = !!energyMap[pnl.id];
-            const ibOn = on; // inputBreaker is already checked in energyMap
-            const sp = n > 1 ? Math.min(40, (PW - 40) / (n - 1)) : 0;
-            const startOX = pnl.x + PW / 2 - (n - 1) * sp / 2;
+            const hasSld = pnl.sld?.elements?.length > 0;
 
             return <g key={pnl.id} onMouseDown={e => startDrag(e, "panel", pnl.id)} style={{ cursor: drag?.type === "panel" ? "grabbing" : "grab" }}>
               {/* Input port */}
@@ -912,116 +902,79 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
                 onClick={e => { e.stopPropagation(); editPanel(pnl); }}>{pnl.name}</text>
               {pnl.location && <text x={pnl.x + PW / 2} y={pnl.y - 5} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>{pnl.location}</text>}
 
-              {/* Background rect */}
-              <rect x={pnl.x} y={pnl.y + 4} width={PW} height={h - 4} rx={5}
-                fill={on ? "#0d1f12" : "#1a1212"} stroke={on ? ON + "40" : "#26323850"} strokeWidth={1.2} />
+              {/* Card background */}
+              <rect x={pnl.x} y={pnl.y + 4} width={PW} height={CARD_H} rx={5}
+                fill={on ? "#0d1f12" : "#1a1212"} stroke={on ? ON + "40" : "#26323850"} strokeWidth={1.2}
+                style={{ cursor: "pointer" }} onClick={e => { e.stopPropagation(); editPanel(pnl); }} />
 
               {/* Meter info */}
-              {pnl.meter?.model && <text x={pnl.x + 6} y={pnl.y + 16} fill={TM} fontSize={4.5} fontFamily={FN}>
-                {pnl.meter.model} {pnl.meter.serial && `#${pnl.meter.serial}`}
-              </text>}
-
-              {/* Input cable info */}
-              {pnl.inputCable?.brand && <text x={pnl.x + 6} y={pnl.y + 23} fill={TM} fontSize={4.5} fontFamily={FN}>
-                {pnl.inputCable.brand}{pnl.inputCable.length > 0 ? `, ${pnl.inputCable.length}м` : ""}
-              </text>}
-
-              {/* Input breaker */}
-              <line x1={pnl.x + PW / 2} y1={pnl.y + 4} x2={pnl.x + PW / 2} y2={pnl.y + 28} stroke={on ? WC : WO} strokeWidth={1.5} />
-              <Sw x={pnl.x + PW / 2} y={pnl.y + 33} on={pnl.inputBreaker?.closed}
-                onClick={() => setP04(prev => ({
-                  ...prev, panels: prev.panels.map(p => p.id === pnl.id
-                    ? { ...p, inputBreaker: { ...p.inputBreaker, closed: !p.inputBreaker.closed } } : p)
-                }))} sz={10} />
-              <text x={pnl.x + PW / 2 + 12} y={pnl.y + 36} fill={on ? TXT : TM} fontSize={4.5} fontFamily={FN}>
-                {pnl.inputBreaker?.name} {pnl.inputBreaker?.nominal}А
+              <text x={pnl.x + 8} y={pnl.y + 18} fill={TM} fontSize={5} fontFamily={FN}>
+                {pnl.meter?.model || "—"}{pnl.meter?.serial ? ` #${pnl.meter.serial}` : ""}
               </text>
 
-              {/* Internal bus */}
-              <rect x={pnl.x + 10} y={pnl.y + 42} width={PW - 20} height={3} rx={1}
-                fill={ibOn ? BUS : BUSOFF} style={ibOn ? { filter: `drop-shadow(0 0 3px ${BUS}30)` } : {}} />
-
-              {/* Phase indicators */}
-              {pnl.liveData && (() => {
+              {/* Current data */}
+              {pnl.liveData ? (() => {
                 const ld = pnl.liveData;
                 const phS = v => (!v || v === 0) ? "warn" : (v < 207 || v > 253) ? "err" : "ok";
-                const clr = s => !ibOn ? PH_OFF : s === "ok" ? PH_OK : s === "err" ? PH_ERR : PH_WARN;
+                const clr = s => !on ? PH_OFF : s === "ok" ? PH_OK : s === "err" ? PH_ERR : PH_WARN;
                 return <g>
+                  <text x={pnl.x + 8} y={pnl.y + 30} fill={on ? TXT : TM} fontSize={5} fontFamily={FN}>
+                    Ia={ld.Ia || 0}A  Ib={ld.Ib || 0}A  Ic={ld.Ic || 0}A
+                  </text>
                   {["Ua", "Ub", "Uc"].map((k, i) => (
                     <g key={k}>
-                      <circle cx={pnl.x + PW - 30 + i * 8} cy={pnl.y + 36} r={2.5} fill={clr(phS(ld[k]))} />
-                      <text x={pnl.x + PW - 30 + i * 8} y={pnl.y + 43} textAnchor="middle" fill={TM} fontSize={3.5} fontFamily={FN}>{k[1]}</text>
+                      <circle cx={pnl.x + PW - 26 + i * 8} cy={pnl.y + 16} r={2.5} fill={clr(phS(ld[k]))} />
+                      <text x={pnl.x + PW - 26 + i * 8} y={pnl.y + 23} textAnchor="middle" fill={TM} fontSize={3.5} fontFamily={FN}>{k[1]}</text>
                     </g>
                   ))}
                 </g>;
-              })()}
+              })() : <text x={pnl.x + 8} y={pnl.y + 30} fill={TM} fontSize={5} fontFamily={FN}>нет данных</text>}
 
-              {/* Out breakers */}
-              {pnl.outBreakers.map((ob, bi) => {
-                const ox = startOX + bi * sp;
-                const obOn = ibOn && ob.closed;
-                const oy = pnl.y + 50 + bi * 22;
-                return <g key={ob.id}>
-                  {/* Vertical from bus */}
-                  <line x1={ox} y1={pnl.y + 45} x2={ox} y2={oy - 6} stroke={ibOn ? BUS : WO} strokeWidth={1} />
-                  <Sw x={ox} y={oy} on={ob.closed}
-                    onClick={() => setP04(prev => ({
-                      ...prev, panels: prev.panels.map(p => p.id === pnl.id
-                        ? { ...p, outBreakers: p.outBreakers.map(b => b.id === ob.id ? { ...b, closed: !b.closed } : b) } : p)
-                    }))} sz={9} />
-                  <text x={ox + 10} y={oy + 3} fill={obOn ? TXT : TM} fontSize={4.5} fontFamily={FN}>{ob.name} {ob.nominal}А</text>
-                  {/* Line to output port */}
-                  <line x1={ox} y1={oy + 6} x2={ox} y2={pnl.y + h - 4} stroke={obOn ? WC : WO} strokeWidth={1} />
-                  {/* Output port */}
-                  <Port x={ox} y={pnl.y + h} on={obOn} label=""
-                    isActive={connecting?.panelId === pnl.id && connecting?.breakerId === ob.id}
-                    onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onPortClick({ panelId: pnl.id, breakerId: ob.id, type: "breakerOut" }); }}
-                    cursor={connecting ? "crosshair" : "pointer"} />
-                </g>;
-              })}
+              {/* Cable + breaker summary */}
+              <text x={pnl.x + 8} y={pnl.y + 42} fill={TM} fontSize={4.5} fontFamily={FN}>
+                {pnl.inputBreaker?.name} {pnl.inputBreaker?.nominal}А · {pnl.inputCable?.brand || ""}
+              </text>
+
+              {/* Output port */}
+              <Port x={pnl.x + PW / 2} y={pnl.y + CARD_H + 10} on={on} label=""
+                isActive={connecting?.panelId === pnl.id && connecting?.type === "breakerOut"}
+                onMouseDown={e => {
+                  e.stopPropagation(); e.preventDefault();
+                  const firstBrk = pnl.outBreakers[0];
+                  if (firstBrk) onPortClick({ panelId: pnl.id, breakerId: firstBrk.id, type: "breakerOut" });
+                }}
+                cursor={connecting ? "crosshair" : "pointer"} />
+
+              {/* ОЛС button */}
+              <g onClick={e => { e.stopPropagation(); setSldEditor({ panelId: pnl.id }); setPlacingType(null); setConnecting(null); }}
+                style={{ cursor: "pointer" }}>
+                <rect x={pnl.x + PW - 26} y={pnl.y + 6} width={22} height={12} rx={2}
+                  fill={hasSld ? WC + "15" : "#0a0f16"} stroke={hasSld ? WC : "#263238"} strokeWidth={0.8} />
+                <text x={pnl.x + PW - 15} y={pnl.y + 14.5} textAnchor="middle"
+                  fill={hasSld ? WC : TD} fontSize={5} fontFamily={FN}>ОЛС</text>
+              </g>
 
               {/* Panel SLD on main canvas */}
-              {(() => {
-                const pSld = pnl.sld;
-                const hasPnlSld = pSld?.elements?.length > 0;
-                if (hasPnlSld) {
-                  const pEnergized = computeSldEnergy(pSld);
-                  return <g>
-                    <SldCanvas sld={pSld} energized={pEnergized} feeders={feeders}
-                      connecting={connecting} setConnecting={setConnecting}
-                      offsetX={pnl.x} offsetY={pnl.y}
-                      onElemClick={id => { const el = pSld.elements.find(ee => ee.id === id); if (el && SLD_SYMBOLS[el.type]?.switchable) toggleSldElem(id, pnl.id); }}
-                      onElemDblClick={id => openSldElemEditor(id, pnl.id)}
-                      onPortClick={(eId, pId) => {
-                        // SLD ports participate in the main link system
-                        const el = pSld.elements.find(ee => ee.id === eId);
-                        if (!el) return;
-                        const sym = SLD_SYMBOLS[el.type];
-                        const port = sym?.ports.find(pp => pp.id === pId);
-                        if (!port) return;
-                        // Port pointing up/left = input to panel, down/right = output from panel
-                        if (port.dir === "u" || port.dir === "l") {
-                          onPortClick({ panelId: pnl.id, type: "panelIn", sldElemId: eId, sldPortId: pId });
-                        } else {
-                          onPortClick({ panelId: pnl.id, breakerId: eId, type: "breakerOut", sldElemId: eId, sldPortId: pId });
-                        }
-                      }}
-                      onElemDragStart={(e, id) => startDrag(e, "sldElem", id, { panelId: pnl.id })} />
-                  </g>;
-                }
-                return null;
-              })()}
-
-              {/* Panel SLD edit button */}
-              {(() => {
-                const hasPnlSld = pnl.sld?.elements?.length > 0;
-                return <g onClick={e => { e.stopPropagation(); setSldEditor({ panelId: pnl.id }); setPlacingType(null); setConnecting(null); }}
-                  style={{ cursor: "pointer" }}>
-                  <rect x={pnl.x + PW - 24} y={pnl.y + 6} width={20} height={12} rx={2}
-                    fill={hasPnlSld ? WC + "15" : "#0a0f16"} stroke={hasPnlSld ? WC : "#263238"} strokeWidth={0.8} />
-                  <text x={pnl.x + PW - 14} y={pnl.y + 14.5} textAnchor="middle"
-                    fill={hasPnlSld ? WC : TD} fontSize={5} fontFamily={FN}>ОЛС</text>
-                </g>;
+              {hasSld && (() => {
+                const pEnergized = computeSldEnergy(pnl.sld);
+                return <SldCanvas sld={pnl.sld} energized={pEnergized} feeders={feeders}
+                  connecting={connecting} setConnecting={setConnecting}
+                  offsetX={pnl.x} offsetY={pnl.y}
+                  onElemClick={id => { const el = pnl.sld.elements.find(ee => ee.id === id); if (el && SLD_SYMBOLS[el.type]?.switchable) toggleSldElem(id, pnl.id); }}
+                  onElemDblClick={id => openSldElemEditor(id, pnl.id)}
+                  onPortClick={(eId, pId) => {
+                    const el = pnl.sld.elements.find(ee => ee.id === eId);
+                    if (!el) return;
+                    const sym = SLD_SYMBOLS[el.type];
+                    const port = sym?.ports.find(pp => pp.id === pId);
+                    if (!port) return;
+                    if (port.dir === "u" || port.dir === "l") {
+                      onPortClick({ panelId: pnl.id, type: "panelIn", sldElemId: eId, sldPortId: pId });
+                    } else {
+                      onPortClick({ panelId: pnl.id, breakerId: eId, type: "breakerOut", sldElemId: eId, sldPortId: pId });
+                    }
+                  }}
+                  onElemDragStart={(e, id) => startDrag(e, "sldElem", id, { panelId: pnl.id })} />;
               })()}
             </g>;
           })}
@@ -1047,7 +1000,7 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
               const pnl = panels.find(p => p.id === connecting.panelId);
               if (pnl) {
                 const bi = pnl.outBreakers.findIndex(b => b.id === connecting.breakerId);
-                if (bi >= 0) fromPos = panelOutPos(pnl, bi);
+                if (bi >= 0) fromPos = panelOutPos(pnl);
               }
             } else if (connecting.type === "panelIn" && connecting.panelId) {
               fromPos = panelInPos(panels.find(p => p.id === connecting.panelId));
