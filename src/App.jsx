@@ -1,9 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from "react";
+import Page04 from "./Page04";
 
 const uid = () => "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const ON = "#00e676", OFF = "#ff1744", BUS = "#ffd600", BUSOFF = "#3a2800";
 const WC = "#00bcd4", WO = "#1c2830", PNL = "#0e1822", DK = "#0a0f16", BG = "#1a2332";
 const TXT = "#b0bec5", TD = "#546e7a", TM = "#37474f", KR = "#ce93d8", LRC = "#ff9800";
+const PH_OK = "#00e676", PH_WARN = "#ffd600", PH_ERR = "#ff1744", PH_OFF = "#37474f";
 const FN = `'Share Tech Mono','JetBrains Mono',monospace`;
 
 const mkTP = (id, n, pw, rm6, x, y) => ({
@@ -11,6 +13,7 @@ const mkTP = (id, n, pw, rm6, x, y) => ({
   // RM6: I(in1), I(in2), D(tr), I(out1) — 4 порта
   // vn: I(in), I(out), ВН(tr)
   sw: { in1: true, in2: true, tr: true, out1: true },
+  phases: { a: "warn", b: "warn", c: "warn" }, // ok | warn | err
 });
 const mkKR = (id, n, secs, x, y) => ({
   id, name: n, x, y,
@@ -22,6 +25,8 @@ const mk2BKTP = (id, n, pw1, pw2, x, y) => ({
   id, name: n, type: "2bktp", power1: pw1, power2: pw2, meterHv1: "", meterHv2: "", cable10: "", x, y,
   sw: { in1_1: true, in2_1: true, tr_1: true, out1_1: true, in1_2: true, in2_2: true, tr_2: true, out1_2: true },
   sv10: false, sv04: false,
+  phases1: { a: "warn", b: "warn", c: "warn" },
+  phases2: { a: "warn", b: "warn", c: "warn" },
 });
 
 const STORAGE_KEY = "energy-scada-state";
@@ -42,28 +47,8 @@ const saveState = (d) => {
   } catch (e) { console.error("[SCADA] Failed to save state:", e); }
 };
 
-const INIT = {
-  psBlock: { x: 200, y: 10 },
-  buses: [{ id: "bus-1", name: "Секция I" }, { id: "bus-2", name: "Секция II" },
-    { id: "bus-rp", name: "РП-25", x: 200, y: 300, inputOn: true,
-      feeders: [{ id: "f11", name: "Ф-11", closed: true }, { id: "f8", name: "Ф-8", closed: true }] }],
-  inputBreakers: [
-    { id: "ib1", feedName: "Луч 1 (ПС-677)", busId: "bus-1", closed: true },
-    { id: "ib2", feedName: "Луч 2 (ПС-677)", busId: "bus-2", closed: true },
-  ],
-  sectionBreakers: [{ id: "sv1", fromBus: "bus-1", toBus: "bus-2", closed: false, name: "СВ" }],
-  cells: [
-    { id: "c1", busId: "bus-1", num: "1", type: "line", closed: true },
-    { id: "c2", busId: "bus-1", num: "2", type: "line", closed: true },
-    { id: "c3", busId: "bus-2", num: "3", type: "line", closed: true },
-    { id: "c4", busId: "bus-2", num: "4", type: "line", closed: true },
-  ],
-  lrs: [],
-  kruns: [],
-  tps: [],
-  links: [],
-  switchLog: [],
-};
+import INIT_STATE from "./init-state.json";
+const INIT = { ...INIT_STATE, switchLog: [] };
 
 // ═══ ENERGY ═══
 function busOn(bId, d) {
@@ -317,9 +302,65 @@ export default function App() {
   const [connecting, setConnecting] = useState(null); // {block,id,port} or null
   const [selLink, setSelLink] = useState(null); // selected link id for waypoint editing
   const [time, setTime] = useState(new Date());
+  const [page, setPage] = useState(null); // null=main, {type:"04",tpId}=0.4kV page
   const svgRef = useRef(null);
   useEffect(() => { const t = setInterval(() => setTime(new Date()), 1000); return () => clearInterval(t); }, []);
   useEffect(() => { saveState(d); }, [d]);
+
+  // ═══ MERCURY METER POLLING ═══
+  const POLL_INTERVAL = 30000; // 30 сек
+  const U_NOM = 230, U_TOL = 0.10;
+  const U_MIN = U_NOM * (1 - U_TOL), U_MAX = U_NOM * (1 + U_TOL);
+  const phaseStatus = (v) => {
+    if (v === null || v === undefined || v === 0) return "warn";
+    if (v < U_MIN || v > U_MAX) return "err";
+    return "ok";
+  };
+
+  useEffect(() => {
+    let active = true;
+    const poll = async () => {
+      // Найти все ТП с привязанным счётчиком (meterReg)
+      const metered = d.tps.filter(tp => tp.meterReg);
+      for (const tp of metered) {
+        try {
+          const r = await fetch(`/mercury/api/poll?reg=${tp.meterReg}`);
+          if (!r.ok) continue;
+          const data = await r.json();
+          if (!active) return;
+          if (data.ok && data.Ua != null) {
+            const phases = {
+              a: phaseStatus(data.Ua),
+              b: phaseStatus(data.Ub),
+              c: phaseStatus(data.Uc),
+            };
+            const meterData = {
+              Ua: data.Ua, Ub: data.Ub, Uc: data.Uc,
+              Ia: data.Ia, Ib: data.Ib, Ic: data.Ic,
+              P: data.P, freq: data.freq, cosF: data.cosF,
+              ts: new Date().toLocaleString("ru-RU"),
+            };
+            setD(prev => ({
+              ...prev,
+              tps: prev.tps.map(t => t.id === tp.id ? { ...t, phases, meterData } : t),
+            }));
+            console.log(`[SCADA] ${tp.name} (${tp.meterReg}): Ua=${data.Ua} Ub=${data.Ub} Uc=${data.Uc}`, phases);
+          } else {
+            setD(prev => ({
+              ...prev,
+              tps: prev.tps.map(t => t.id === tp.id ? { ...t, phases: { a: "warn", b: "warn", c: "warn" } } : t),
+            }));
+            console.warn(`[SCADA] ${tp.name} (${tp.meterReg}): no data`, data.error);
+          }
+        } catch (e) {
+          console.warn(`[SCADA] Mercury poll failed for ${tp.name}:`, e.message);
+        }
+      }
+    };
+    poll();
+    const timer = setInterval(poll, POLL_INTERVAL);
+    return () => { active = false; clearInterval(timer); };
+  }, []);
 
   const log = useCallback(desc => { setD(p => ({ ...p, switchLog: [{ t: new Date().toLocaleString("ru-RU"), d: desc }, ...p.switchLog].slice(0, 300) })); }, []);
 
@@ -506,7 +547,7 @@ export default function App() {
   }).length;
   
   // Large canvas
-  const CANVAS_W = 3000, CANVAS_H = 2000;
+  const CANVAS_W = 6000, CANVAS_H = 4000;
   
   // Pan & Zoom state
   const [view, setView] = useState({ x: 0, y: 0, zoom: 1 });
@@ -638,6 +679,17 @@ export default function App() {
       </g>
     );
   };
+
+  // ═══ 0.4kV PAGE ROUTING ═══
+  if (page?.type === "04") {
+    const tpP = d.tps.find(t => t.id === page.tpId);
+    if (!tpP) { setPage(null); return null; }
+    const is2b = tpP.type === "2bktp";
+    const trState = is2b
+      ? { tr1On: isEnergized(`tp-in1_1:${page.tpId}`, d) && tpP.sw.tr_1, tr2On: isEnergized(`tp-in1_2:${page.tpId}`, d) && tpP.sw.tr_2, sv04: tpP.sv04 }
+      : { trOn: isEnergized(`tp-in1:${page.tpId}`, d) && tpP.sw.tr };
+    return <Page04 tpId={page.tpId} d={d} setD={setD} log={log} trState={trState} onBack={() => setPage(null)} />;
+  }
 
   return (
     <div style={{ background: DK, minHeight: "100vh", fontFamily: FN, color: TXT, display: "flex", flexDirection: "column" }}>
@@ -859,11 +911,11 @@ export default function App() {
                 pointerEvents="none" />
               {/* Cable label */}
               {link.cable && <text x={mx} y={my - 4} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>{link.cable}</text>}
-              {/* Delete X */}
-              <g onClick={e => { e.stopPropagation(); delLink(link.id); setSelLink(null); }} style={{ cursor: "pointer" }}>
+              {/* Delete X — only when selected */}
+              {isSel && <g onClick={e => { e.stopPropagation(); delLink(link.id); setSelLink(null); }} style={{ cursor: "pointer" }}>
                 <circle cx={mx} cy={my} r={4} fill="#2a1010" stroke="#4a2020" strokeWidth={.5} opacity={.6} />
                 <text x={mx} y={my + 2.5} textAnchor="middle" fill={OFF} fontSize={6} fontFamily={FN}>✕</text>
-              </g>
+              </g>}
               {/* Waypoint handles when selected */}
               {isSel && wps.map((wp, i) => (
                 <g key={i}>
@@ -962,8 +1014,25 @@ export default function App() {
                 {tp.rm6Type === "rm6" ? "D" : "ВН"}</text>
               <circle cx={tp.x + 45} cy={tp.y + 42} r={3} fill="none" stroke={trOn ? BUS : BUSOFF} strokeWidth={1} />
               <circle cx={tp.x + 45} cy={tp.y + 48} r={3} fill="none" stroke={trOn ? WC : WO} strokeWidth={1} />
-              <text x={tp.x + 45} y={tp.y + 56} textAnchor="middle" fill={trOn ? ON : TM} fontSize={5} fontFamily={FN}>
+              <text x={tp.x + 45} y={tp.y + 56} textAnchor="middle" fill={trOn ? ON : TM} fontSize={5} fontFamily={FN}
+                style={{ cursor: "pointer", textDecoration: "underline" }}
+                onClick={e => { e.stopPropagation(); setPage({ type: "04", tpId: tp.id }); }}>
                 {trOn ? "● 0.4" : "○ 0.4"}</text>
+              {/* 3-phase indicators 0.4kV */}
+              {(() => { const ph = tp.phases || { a: "warn", b: "warn", c: "warn" };
+                const md = tp.meterData;
+                const clr = s => !trOn ? PH_OFF : s === "ok" ? PH_OK : s === "err" ? PH_ERR : PH_WARN;
+                const uKey = { a: "Ua", b: "Ub", c: "Uc" };
+                const bx = tp.x + 33, by = tp.y + 62;
+                return <g>
+                  {["a","b","c"].map((p,i) => <g key={p}>
+                    <circle cx={bx + i * 9} cy={by} r={2.8} fill={clr(ph[p])} opacity={trOn ? 1 : 0.3} />
+                    <text x={bx + i * 9} y={by + 8} textAnchor="middle" fill={trOn ? TXT : TM} fontSize={4} fontFamily={FN}>{p.toUpperCase()}</text>
+                    {md && md[uKey[p]] != null && <title>{p.toUpperCase()}: {md[uKey[p]].toFixed(1)}В</title>}
+                  </g>)}
+                  {md?.ts && <text x={bx + 9} y={by + 14} textAnchor="middle" fill={TM} fontSize={3} fontFamily={FN}>{md.ts}</text>}
+                </g>;
+              })()}
 
               {/* Port out1 (I выход) */}
               <Sw x={tp.x + 68} y={tp.y + 18} on={tp.sw.out1} onClick={() => togTP(tp.id, "out1")} />
@@ -1015,8 +1084,21 @@ export default function App() {
               <text x={tp.x + 45} y={tp.y + 29} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>D</text>
               <circle cx={tp.x + 45} cy={tp.y + 44} r={3} fill="none" stroke={tr1on ? BUS : BUSOFF} strokeWidth={1} />
               <circle cx={tp.x + 45} cy={tp.y + 50} r={3} fill="none" stroke={tr1on ? WC : WO} strokeWidth={1} />
-              <text x={tp.x + 45} y={tp.y + 58} textAnchor="middle" fill={tr1on ? ON : TM} fontSize={5} fontFamily={FN}>
+              <text x={tp.x + 45} y={tp.y + 58} textAnchor="middle" fill={tr1on ? ON : TM} fontSize={5} fontFamily={FN}
+                style={{ cursor: "pointer", textDecoration: "underline" }}
+                onClick={e => { e.stopPropagation(); setPage({ type: "04", tpId: tp.id }); }}>
                 {tr1on ? "● 0.4-I" : "○ 0.4-I"}</text>
+              {/* 3-phase indicators section 1 */}
+              {(() => { const ph = tp.phases1 || { a: "warn", b: "warn", c: "warn" };
+                const clr = s => !tr1on ? PH_OFF : s === "ok" ? PH_OK : s === "err" ? PH_ERR : PH_WARN;
+                const bx = tp.x + 33, by = tp.y + 64;
+                return <g>
+                  {["a","b","c"].map((p,i) => <g key={p}>
+                    <circle cx={bx + i * 9} cy={by} r={2.8} fill={clr(ph[p])} opacity={tr1on ? 1 : 0.3} />
+                    <text x={bx + i * 9} y={by + 8} textAnchor="middle" fill={tr1on ? TXT : TM} fontSize={4} fontFamily={FN}>{p.toUpperCase()}</text>
+                  </g>)}
+                </g>;
+              })()}
               {/* Port out1_1 */}
               <Port x={tp.x} y={tp.y + 64} on={out1on} label="I вых" portRef={{ block: "tp", id: tp.id, port: "out1_1" }} />
               <line x1={tp.x + 5} y1={tp.y + 64} x2={tp.x + 16} y2={tp.y + 64} stroke={out1on ? WC : WO} strokeWidth={1} />
@@ -1047,8 +1129,21 @@ export default function App() {
               <text x={tp.x + W - 45} y={tp.y + 29} textAnchor="middle" fill={TM} fontSize={5} fontFamily={FN}>D</text>
               <circle cx={tp.x + W - 45} cy={tp.y + 44} r={3} fill="none" stroke={tr2on ? BUS : BUSOFF} strokeWidth={1} />
               <circle cx={tp.x + W - 45} cy={tp.y + 50} r={3} fill="none" stroke={tr2on ? WC : WO} strokeWidth={1} />
-              <text x={tp.x + W - 45} y={tp.y + 58} textAnchor="middle" fill={tr2on ? ON : TM} fontSize={5} fontFamily={FN}>
+              <text x={tp.x + W - 45} y={tp.y + 58} textAnchor="middle" fill={tr2on ? ON : TM} fontSize={5} fontFamily={FN}
+                style={{ cursor: "pointer", textDecoration: "underline" }}
+                onClick={e => { e.stopPropagation(); setPage({ type: "04", tpId: tp.id }); }}>
                 {tr2on ? "● 0.4-II" : "○ 0.4-II"}</text>
+              {/* 3-phase indicators section 2 */}
+              {(() => { const ph = tp.phases2 || { a: "warn", b: "warn", c: "warn" };
+                const clr = s => !tr2on ? PH_OFF : s === "ok" ? PH_OK : s === "err" ? PH_ERR : PH_WARN;
+                const bx = tp.x + W - 57, by = tp.y + 64;
+                return <g>
+                  {["a","b","c"].map((p,i) => <g key={p}>
+                    <circle cx={bx + i * 9} cy={by} r={2.8} fill={clr(ph[p])} opacity={tr2on ? 1 : 0.3} />
+                    <text x={bx + i * 9} y={by + 8} textAnchor="middle" fill={tr2on ? TXT : TM} fontSize={4} fontFamily={FN}>{p.toUpperCase()}</text>
+                  </g>)}
+                </g>;
+              })()}
               {/* Port out1_2 */}
               <Port x={tp.x + W} y={tp.y + 64} on={out2on} label="I вых" portRef={{ block: "tp", id: tp.id, port: "out1_2" }} />
               <line x1={tp.x + W - 5} y1={tp.y + 64} x2={tp.x + W - 16} y2={tp.y + 64} stroke={out2on ? WC : WO} strokeWidth={1} />

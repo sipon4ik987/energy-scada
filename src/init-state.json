@@ -1,0 +1,1579 @@
+{
+  "psBlock": {
+    "x": 663.342138671875,
+    "y": 100
+  },
+  "buses": [
+    {
+      "id": "bus-1",
+      "name": "Секция I"
+    },
+    {
+      "id": "bus-2",
+      "name": "Секция II"
+    },
+    {
+      "id": "bus-rp",
+      "name": "РП-25",
+      "x": 718.12021484375,
+      "y": 3017.5859863281257,
+      "inputOn": true,
+      "feeders": [
+        {
+          "id": "f11",
+          "name": "Ф-11",
+          "closed": true
+        },
+        {
+          "id": "f8",
+          "name": "Ф-8",
+          "closed": true
+        }
+      ]
+    }
+  ],
+  "inputBreakers": [
+    {
+      "id": "ib1",
+      "feedName": "Луч 1 (ПС-677)",
+      "busId": "bus-1",
+      "closed": true
+    },
+    {
+      "id": "ib2",
+      "feedName": "Луч 2 (ПС-677)",
+      "busId": "bus-2",
+      "closed": true
+    }
+  ],
+  "sectionBreakers": [
+    {
+      "id": "sv1",
+      "fromBus": "bus-1",
+      "toBus": "bus-2",
+      "closed": false,
+      "name": "СВ"
+    }
+  ],
+  "cells": [
+    {
+      "id": "c1",
+      "busId": "bus-1",
+      "num": "1",
+      "type": "line",
+      "closed": true
+    },
+    {
+      "id": "c2",
+      "busId": "bus-1",
+      "num": "2",
+      "type": "line",
+      "closed": false
+    },
+    {
+      "id": "c3",
+      "busId": "bus-2",
+      "num": "3",
+      "type": "line",
+      "closed": true
+    },
+    {
+      "id": "c4",
+      "busId": "bus-2",
+      "num": "4",
+      "type": "line",
+      "closed": true
+    }
+  ],
+  "lrs": [
+    {
+      "id": "nmm55trf66qz",
+      "name": "ЛР крун-76",
+      "closed": true,
+      "meter": "",
+      "x": 708.6373046875,
+      "y": 2761.5237548828127
+    },
+    {
+      "id": "nmm9ezz5epw1",
+      "name": "ЛР 1917-1",
+      "closed": true,
+      "meter": "",
+      "x": 547.3041015625,
+      "y": 735.8094238281251
+    },
+    {
+      "id": "nmm9f17ytwll",
+      "name": "ЛР 1917/2",
+      "closed": true,
+      "meter": "",
+      "x": 694.1783203125,
+      "y": 737.0909667968751
+    },
+    {
+      "id": "nmm9f1xcyge8",
+      "name": "ЛР-1915/1",
+      "closed": true,
+      "meter": "",
+      "x": 718.942529296875,
+      "y": 1468.4000488281251
+    }
+  ],
+  "kruns": [
+    {
+      "id": "nmm55063nmbj",
+      "name": "КРУН-1",
+      "x": 230.54204101562493,
+      "y": 556.0000000000001,
+      "sections": [
+        {
+          "id": "nmm55063nmbj-s1",
+          "name": "ВВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm55063nmbj-s2",
+          "name": "НА 3402",
+          "closed": true
+        },
+        {
+          "id": "nmm55063nmbj-s3",
+          "name": "НА 3403",
+          "closed": true
+        },
+        {
+          "id": "nmm55063nmbj-s4",
+          "name": "ВЫВОД",
+          "closed": true
+        }
+      ]
+    },
+    {
+      "id": "nmm5530tv6fj",
+      "name": "КРУН-3",
+      "x": 296.62934570312495,
+      "y": 1184.52177734375,
+      "sections": [
+        {
+          "id": "nmm5530tv6fj-s1",
+          "name": "ВВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm5530tv6fj-s2",
+          "name": "1911/2",
+          "closed": true
+        },
+        {
+          "id": "nmm5530tv6fj-s3",
+          "name": "ВЫВОД",
+          "closed": true
+        }
+      ]
+    },
+    {
+      "id": "nmm557tkgt0x",
+      "name": "КРУН-2",
+      "x": 1286.54189453125,
+      "y": 566.6666503906251,
+      "sections": [
+        {
+          "id": "nmm557tkgt0x-s1",
+          "name": "ВВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm557tkgt0x-s2",
+          "name": "НА ТП-1912",
+          "closed": true
+        },
+        {
+          "id": "nmm557tkgt0x-s3",
+          "name": "ВЫВОД",
+          "closed": true
+        }
+      ]
+    },
+    {
+      "id": "nmm55f5kozp3",
+      "name": "КРУН-4",
+      "x": 259.04643554687493,
+      "y": 1444.893310546875,
+      "sections": [
+        {
+          "id": "nmm55f5kozp3-s1",
+          "name": "ВВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm55f5kozp3-s2",
+          "name": "1911/3",
+          "closed": true
+        },
+        {
+          "id": "nmm55f5kozp3-s3",
+          "name": "1915",
+          "closed": true
+        },
+        {
+          "id": "nmm55f5kozp3-s4",
+          "name": "ВЫВОД",
+          "closed": true
+        }
+      ]
+    },
+    {
+      "id": "nmm55gcmckt3",
+      "name": "КРУН-76",
+      "x": 631.8747558593751,
+      "y": 2453.33251953125,
+      "sections": [
+        {
+          "id": "nmm55gcmckt3-s1",
+          "name": "ВВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm55gcmckt3-s2",
+          "name": "ВЫВОД",
+          "closed": true
+        }
+      ]
+    },
+    {
+      "id": "nmm55rgl1xkd",
+      "name": "КРУН-5",
+      "x": 338.54189453125,
+      "y": 1731.9998046875,
+      "sections": [
+        {
+          "id": "nmm55rgl1xkd-s1",
+          "name": "ВВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm55rgl1xkd-s2",
+          "name": "1911/1",
+          "closed": true
+        },
+        {
+          "id": "nmm55rgl1xkd-s3",
+          "name": "1912/2",
+          "closed": true
+        }
+      ]
+    },
+    {
+      "id": "nmm55ssvv592",
+      "name": "КРУН Зеленый",
+      "x": 926.54208984375,
+      "y": 2439.99970703125,
+      "sections": [
+        {
+          "id": "nmm55ssvv592-s1",
+          "name": "ВВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm55ssvv592-s2",
+          "name": "ВЫВОД",
+          "closed": true
+        },
+        {
+          "id": "nmm55ssvv592-s3",
+          "name": "НА ТП-1916",
+          "closed": true
+        }
+      ]
+    }
+  ],
+  "tps": [
+    {
+      "id": "nmm5517111u9",
+      "name": "ТП 3402",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "vn",
+      "x": 210.54204101562493,
+      "y": 872.4444824218751,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": false
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm551in2qp5",
+      "name": "ТП 3403",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "vn",
+      "x": 208.76425781249998,
+      "y": 1005.7778320312501,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": false
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm554shtl7e",
+      "name": "ТП-1911/2",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 672.9418945312501,
+      "y": 935.6571777343751,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm5554n0vop",
+      "name": "ТП-1911/1",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 877.20791015625,
+      "y": 939.8095703125001,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm555och0tz",
+      "name": "ТП-3401",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 763.7336914062499,
+      "y": 1338.8737304687502,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm5570s122c",
+      "name": "ТП-3504",
+      "type": "2bktp",
+      "power1": 1000,
+      "power2": 1000,
+      "meterHv1": "",
+      "meterHv2": "",
+      "cable10": "",
+      "x": 739.6850585937501,
+      "y": 1822.2857910156251,
+      "sw": {
+        "in1_1": true,
+        "in2_1": true,
+        "tr_1": true,
+        "out1_1": true,
+        "in1_2": true,
+        "in2_2": true,
+        "tr_2": true,
+        "out1_2": true
+      },
+      "sv10": false,
+      "sv04": false
+    },
+    {
+      "id": "nmm55cci1zix",
+      "name": "ТП-1913",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "vn",
+      "x": 1220.1418945312498,
+      "y": 829.6000000000001,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630,
+      "phases": {
+        "a": "warn",
+        "b": "warn",
+        "c": "warn"
+      },
+      "meterReg": "13401"
+    },
+    {
+      "id": "nmm55d79em0a",
+      "name": "ТП-1912/1",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "vn",
+      "x": 1213.742041015625,
+      "y": 1002.3999511718752,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm55e4ew92c",
+      "name": "ТП-1912/2",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 1208.09912109375,
+      "y": 1168.427294921875,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm55hmk66sz",
+      "name": "ТП-1911/3",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 867.685888671875,
+      "y": 1090.8564453125,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm55hu7kaev",
+      "name": "ТП-1915",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 1132.31982421875,
+      "y": 1525.7777832031252,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm55i0vluiy",
+      "name": "ТП 1917/1",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 728.4407226562499,
+      "y": 571.191943359375,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm55i8br9mi",
+      "name": "ТП-1917/2",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "rm6",
+      "x": 945.97646484375,
+      "y": 571.5958496093751,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm9ep8wv4fl",
+      "name": "ТП-1916",
+      "power": 1000,
+      "meterHv": "",
+      "rm6Type": "vn",
+      "x": 1399.59189453125,
+      "y": 2621.895703125,
+      "sw": {
+        "in1": true,
+        "in2": true,
+        "tr": true,
+        "out1": true
+      },
+      "cable10": "",
+      "trNominal": 1000,
+      "cells04": 12,
+      "cellNominal": 630
+    },
+    {
+      "id": "nmm9ewqvj9gd",
+      "name": "ТП-3505 азбука",
+      "type": "2bktp",
+      "power1": 1000,
+      "power2": 1000,
+      "meterHv1": "",
+      "meterHv2": "",
+      "cable10": "",
+      "x": 1540.5421875000002,
+      "y": 2289.9999023437504,
+      "sw": {
+        "in1_1": true,
+        "in2_1": true,
+        "tr_1": true,
+        "out1_1": true,
+        "in1_2": true,
+        "in2_2": true,
+        "tr_2": true,
+        "out1_2": true
+      },
+      "sv10": false,
+      "sv04": false
+    }
+  ],
+  "links": [
+    {
+      "id": "nmm5512e0me6",
+      "from": {
+        "block": "cell",
+        "id": "c1",
+        "port": "out"
+      },
+      "to": {
+        "block": "krun",
+        "id": "nmm55063nmbj",
+        "port": "s1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 138.29443359375,
+          "y": 720.2936035156251
+        }
+      ]
+    },
+    {
+      "id": "nmm5542j9hkf",
+      "from": {
+        "block": "krun",
+        "id": "nmm55063nmbj",
+        "port": "s4"
+      },
+      "to": {
+        "block": "krun",
+        "id": "nmm5530tv6fj",
+        "port": "s1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 486.60185546874993,
+          "y": 1117.83212890625
+        }
+      ]
+    },
+    {
+      "id": "nmm555hokq0h",
+      "from": {
+        "block": "krun",
+        "id": "nmm5530tv6fj",
+        "port": "s2"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm554shtl7e",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 586.2946289062501,
+          "y": 933.2166015625
+        }
+      ]
+    },
+    {
+      "id": "nmm5560k51h9",
+      "from": {
+        "block": "krun",
+        "id": "nmm5530tv6fj",
+        "port": "s3"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm555och0tz",
+        "port": "in1"
+      },
+      "cable": ""
+    },
+    {
+      "id": "nmm556fr9xui",
+      "from": {
+        "block": "krun",
+        "id": "nmm55063nmbj",
+        "port": "s2"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm5517111u9",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 346.29453125,
+          "y": 794.1397460937501
+        }
+      ]
+    },
+    {
+      "id": "nmm556id16o2",
+      "from": {
+        "block": "krun",
+        "id": "nmm55063nmbj",
+        "port": "s3"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm551in2qp5",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 411.52529296875,
+          "y": 988.6013671875002
+        }
+      ]
+    },
+    {
+      "id": "nmm557i3ilo9",
+      "from": {
+        "block": "tp",
+        "id": "nmm555och0tz",
+        "port": "out1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm5570s122c",
+        "port": "in1_1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 715.9592773437499,
+          "y": 1692.5107421875002
+        }
+      ]
+    },
+    {
+      "id": "nmm558pxv6qe",
+      "from": {
+        "block": "cell",
+        "id": "c4",
+        "port": "out"
+      },
+      "to": {
+        "block": "krun",
+        "id": "nmm557tkgt0x",
+        "port": "s1"
+      },
+      "cable": ""
+    },
+    {
+      "id": "nmm55cu1hosc",
+      "from": {
+        "block": "krun",
+        "id": "nmm557tkgt0x",
+        "port": "s1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55cci1zix",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 1188.41005859375,
+          "y": 854.6136718750001
+        }
+      ]
+    },
+    {
+      "id": "nmm55ezzesmf",
+      "from": {
+        "block": "krun",
+        "id": "nmm557tkgt0x",
+        "port": "s3"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm5570s122c",
+        "port": "in1_2"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55iim2q41",
+      "from": {
+        "block": "tp",
+        "id": "nmm55hmk66sz",
+        "port": "in1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55hmk66sz",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55jf8nsd7",
+      "from": {
+        "block": "krun",
+        "id": "nmm55f5kozp3",
+        "port": "s2"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55hmk66sz",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 601.0637695312499,
+          "y": 1120.2936523437502
+        }
+      ]
+    },
+    {
+      "id": "nmm55md1bjj8",
+      "from": {
+        "block": "krun",
+        "id": "nmm5530tv6fj",
+        "port": "s1"
+      },
+      "to": {
+        "block": "krun",
+        "id": "nmm5530tv6fj",
+        "port": "s1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55p245sw6",
+      "from": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "out1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "out1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55pi739yp",
+      "from": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "out1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "out1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55ppq4h3c",
+      "from": {
+        "block": "tp",
+        "id": "nmm55cci1zix",
+        "port": "out1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55cci1zix",
+        "port": "out1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55pt4x0go",
+      "from": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "in1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55pyzv307",
+      "from": {
+        "block": "tp",
+        "id": "nmm55cci1zix",
+        "port": "out1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 1157.0500976562498,
+          "y": 965.7603515625001
+        }
+      ]
+    },
+    {
+      "id": "nmm55q8il1mu",
+      "from": {
+        "block": "tp",
+        "id": "nmm55d79em0a",
+        "port": "out1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55e4ew92c",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 1153.2102539062498,
+          "y": 1138.5604492187501
+        }
+      ]
+    },
+    {
+      "id": "nmm55ug6g8u0",
+      "from": {
+        "block": "bus",
+        "id": "bus-rp",
+        "port": "f11"
+      },
+      "to": {
+        "block": "lr",
+        "id": "nmm55trf66qz",
+        "port": "a"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55ull3wof",
+      "from": {
+        "block": "lr",
+        "id": "nmm55trf66qz",
+        "port": "a"
+      },
+      "to": {
+        "block": "krun",
+        "id": "nmm55gcmckt3",
+        "port": "s1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55uqmcl4f",
+      "from": {
+        "block": "bus",
+        "id": "bus-rp",
+        "port": "f8"
+      },
+      "to": {
+        "block": "krun",
+        "id": "nmm55ssvv592",
+        "port": "s1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55uy4jyf8",
+      "from": {
+        "block": "tp",
+        "id": "nmm55hu7kaev",
+        "port": "in1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55hu7kaev",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm55vhc97i8",
+      "from": {
+        "block": "krun",
+        "id": "nmm55f5kozp3",
+        "port": "s3"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55hu7kaev",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 446.98310546875007,
+          "y": 1632.7478515625
+        }
+      ]
+    },
+    {
+      "id": "nmm9eq2b62px",
+      "from": {
+        "block": "krun",
+        "id": "nmm55ssvv592",
+        "port": "s3"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm9ep8wv4fl",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm9er84e0jq",
+      "from": {
+        "block": "krun",
+        "id": "nmm55rgl1xkd",
+        "port": "s2"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm5554n0vop",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 659.0500976562499,
+          "y": 1775.8115234375002
+        },
+        {
+          "x": 1064.38330078125,
+          "y": 1230.03369140625
+        }
+      ]
+    },
+    {
+      "id": "nmm9esi38chm",
+      "from": {
+        "block": "krun",
+        "id": "nmm55rgl1xkd",
+        "port": "s3"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55e4ew92c",
+        "port": "out1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 632.0168945312499,
+          "y": 1721.5142578125
+        },
+        {
+          "x": 1384.3918945312498,
+          "y": 1718.3548828125001
+        }
+      ]
+    },
+    {
+      "id": "nmm9ewhpldko",
+      "from": {
+        "block": "tp",
+        "id": "nmm55i0vluiy",
+        "port": "out1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55i8br9mi",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm9exjmv7bm",
+      "from": {
+        "block": "tp",
+        "id": "nmm5570s122c",
+        "port": "out1_2"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm9ewqvj9gd",
+        "port": "in1_2"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 2012.8883789062497,
+          "y": 1925.6681640625002
+        }
+      ]
+    },
+    {
+      "id": "nmm9eyl9ylqs",
+      "from": {
+        "block": "krun",
+        "id": "nmm55f5kozp3",
+        "port": "s1"
+      },
+      "to": {
+        "block": "krun",
+        "id": "nmm55gcmckt3",
+        "port": "s2"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 100,
+          "y": 2635.001171875
+        }
+      ]
+    },
+    {
+      "id": "nmm9ezd0mm6l",
+      "from": {
+        "block": "tp",
+        "id": "nmm5570s122c",
+        "port": "out1_1"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm9ewqvj9gd",
+        "port": "in1_1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 708.00009765625,
+          "y": 2140.7789062500005
+        }
+      ]
+    },
+    {
+      "id": "nmm9f0ulewgn",
+      "from": {
+        "block": "krun",
+        "id": "nmm55f5kozp3",
+        "port": "s4"
+      },
+      "to": {
+        "block": "lr",
+        "id": "nmm9ezz5epw1",
+        "port": "a"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm9f1kwk18h",
+      "from": {
+        "block": "lr",
+        "id": "nmm9ezz5epw1",
+        "port": "b"
+      },
+      "to": {
+        "block": "lr",
+        "id": "nmm9f17ytwll",
+        "port": "a"
+      },
+      "cable": "",
+      "waypoints": []
+    },
+    {
+      "id": "nmm9f1m5oxh9",
+      "from": {
+        "block": "lr",
+        "id": "nmm9f17ytwll",
+        "port": "b"
+      },
+      "to": {
+        "block": "tp",
+        "id": "nmm55i0vluiy",
+        "port": "in1"
+      },
+      "cable": "",
+      "waypoints": [
+        {
+          "x": 679.99033203125,
+          "y": 687.1334472656251
+        }
+      ]
+    }
+  ],
+  "panels04": {},
+  "switchLog": [
+    {
+      "t": "02.03.2026, 20:18:09",
+      "d": "ТП 3402 tr: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 20:18:08",
+      "d": "ТП 3402 tr: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 20:18:08",
+      "d": "ТП 3402 tr: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 20:18:07",
+      "d": "ТП 3402 tr: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 20:18:07",
+      "d": "ТП 3402 tr: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 20:18:06",
+      "d": "ТП 3402 tr: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 20:18:06",
+      "d": "ТП 3402 tr: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 20:00:32",
+      "d": "Импорт схемы из файла"
+    },
+    {
+      "t": "02.03.2026, 19:51:26",
+      "d": "Кабель: lr:nmm9f17ytwll → tp-in1:nmm55i0vluiy"
+    },
+    {
+      "t": "02.03.2026, 19:51:25",
+      "d": "Кабель: lr:nmm9ezz5epw1 → lr:nmm9f17ytwll"
+    },
+    {
+      "t": "02.03.2026, 19:50:58",
+      "d": "ЛР 1917-1: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:50:58",
+      "d": "ЛР 1917-1: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:50:55",
+      "d": "ЛР 1917-1: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:50:55",
+      "d": "ЛР 1917-1: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:50:50",
+      "d": "Кабель: ks:nmm55f5kozp3-s4 → lr:nmm9ezz5epw1"
+    },
+    {
+      "t": "02.03.2026, 19:49:41",
+      "d": "Кабель: tp-out1_1:nmm5570s122c → tp-in1_1:nmm9ewqvj9gd"
+    },
+    {
+      "t": "02.03.2026, 19:49:05",
+      "d": "Кабель: ks:nmm55f5kozp3-s1 → ks:nmm55gcmckt3-s2"
+    },
+    {
+      "t": "02.03.2026, 19:48:56",
+      "d": "Кабель: tp-in1_1:nmm9ewqvj9gd → ks:nmm55rgl1xkd-s1"
+    },
+    {
+      "t": "02.03.2026, 19:48:25",
+      "d": "Яч.1: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:48:25",
+      "d": "Яч.1: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:48:21",
+      "d": "Кабель: tp-in1_1:nmm5570s122c → tp-in1_1:nmm9ewqvj9gd"
+    },
+    {
+      "t": "02.03.2026, 19:48:16",
+      "d": "Кабель: tp-out1_2:nmm5570s122c → tp-in1_2:nmm9ewqvj9gd"
+    },
+    {
+      "t": "02.03.2026, 19:47:30",
+      "d": "Яч.1: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:47:30",
+      "d": "Яч.1: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:47:27",
+      "d": "Кабель: tp-out1:nmm55i0vluiy → tp-in1:nmm55i8br9mi"
+    },
+    {
+      "t": "02.03.2026, 19:47:24",
+      "d": "Яч.1: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:47:24",
+      "d": "Яч.1: ВКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:47:19",
+      "d": "Яч.1: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:47:19",
+      "d": "Яч.1: ОТКЛ"
+    },
+    {
+      "t": "02.03.2026, 19:46:30",
+      "d": "Кабель: ks:nmm55f5kozp3-s4 → tp-in1:nmm55i0vluiy"
+    },
+    {
+      "t": "02.03.2026, 19:44:21",
+      "d": "Кабель: ks:nmm55rgl1xkd-s3 → tp-out1:nmm55e4ew92c"
+    },
+    {
+      "t": "02.03.2026, 19:43:21",
+      "d": "Кабель: ks:nmm55rgl1xkd-s2 → tp-in1:nmm5554n0vop"
+    },
+    {
+      "t": "02.03.2026, 19:43:10",
+      "d": "Кабель: ks:nmm55ssvv592-s2 → ks:nmm55rgl1xkd-s1"
+    },
+    {
+      "t": "02.03.2026, 19:42:27",
+      "d": "Кабель: ks:nmm55ssvv592-s3 → tp-in1:nmm9ep8wv4fl"
+    },
+    {
+      "t": "27.02.2026, 20:23:39",
+      "d": "Кабель: ks:nmm55f5kozp3-s3 → tp-in1:nmm55hu7kaev"
+    },
+    {
+      "t": "27.02.2026, 20:23:14",
+      "d": "Кабель: tp-in1:nmm55hu7kaev → tp-in1:nmm55hu7kaev"
+    },
+    {
+      "t": "27.02.2026, 20:23:04",
+      "d": "Кабель: bus-f8:bus-rp → ks:nmm55ssvv592-s1"
+    },
+    {
+      "t": "27.02.2026, 20:22:58",
+      "d": "Кабель: lr:nmm55trf66qz → ks:nmm55gcmckt3-s1"
+    },
+    {
+      "t": "27.02.2026, 20:22:54",
+      "d": "ЛР крун-76: ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:22:54",
+      "d": "ЛР крун-76: ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:22:51",
+      "d": "Кабель: bus-f11:bus-rp → lr:nmm55trf66qz"
+    },
+    {
+      "t": "27.02.2026, 20:22:32",
+      "d": "ЛР крун-76: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:22:32",
+      "d": "ЛР крун-76: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:34",
+      "d": "Кабель: tp-out1:nmm55d79em0a → tp-in1:nmm55e4ew92c"
+    },
+    {
+      "t": "27.02.2026, 20:19:22",
+      "d": "Кабель: tp-out1:nmm55cci1zix → tp-in1:nmm55d79em0a"
+    },
+    {
+      "t": "27.02.2026, 20:19:14",
+      "d": "Кабель: tp-in1:nmm55d79em0a → tp-in1:nmm55d79em0a"
+    },
+    {
+      "t": "27.02.2026, 20:19:12",
+      "d": "ТП-1913 out1: ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:11",
+      "d": "ТП-1913 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:11",
+      "d": "ТП-1913 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:11",
+      "d": "ТП-1913 out1: ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:11",
+      "d": "ТП-1913 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:11",
+      "d": "ТП-1913 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:10",
+      "d": "Кабель: tp-out1:nmm55cci1zix → tp-out1:nmm55cci1zix"
+    },
+    {
+      "t": "27.02.2026, 20:19:07",
+      "d": "ТП-1912/1 out1: ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:07",
+      "d": "ТП-1912/1 out1: ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:07",
+      "d": "ТП-1912/1 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:07",
+      "d": "ТП-1912/1 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:19:00",
+      "d": "Кабель: tp-out1:nmm55d79em0a → tp-out1:nmm55d79em0a"
+    },
+    {
+      "t": "27.02.2026, 20:18:39",
+      "d": "Кабель: tp-out1:nmm55d79em0a → tp-out1:nmm55d79em0a"
+    },
+    {
+      "t": "27.02.2026, 20:16:33",
+      "d": "Кабель: ks:nmm5530tv6fj-s1 → ks:nmm5530tv6fj-s1"
+    },
+    {
+      "t": "27.02.2026, 20:14:16",
+      "d": "Кабель: ks:nmm55f5kozp3-s2 → tp-in1:nmm55hmk66sz"
+    },
+    {
+      "t": "27.02.2026, 20:13:34",
+      "d": "Кабель: tp-in1:nmm55hmk66sz → tp-in1:nmm55hmk66sz"
+    },
+    {
+      "t": "27.02.2026, 20:12:41",
+      "d": "Кабель: ks:nmm55gcmckt3-s2 → ks:nmm55f5kozp3-s1"
+    },
+    {
+      "t": "27.02.2026, 20:12:36",
+      "d": "Кабель: bus-f11:bus-rp → ks:nmm55gcmckt3-s1"
+    },
+    {
+      "t": "27.02.2026, 20:10:50",
+      "d": "Кабель: ks:nmm557tkgt0x-s3 → tp-in1_2:nmm5570s122c"
+    },
+    {
+      "t": "27.02.2026, 20:10:27",
+      "d": "Кабель: tp-out1:nmm55d79em0a → tp-in1:nmm55e4ew92c"
+    },
+    {
+      "t": "27.02.2026, 20:09:57",
+      "d": "Кабель: tp-out1:nmm55cci1zix → tp-in1:nmm55d79em0a"
+    },
+    {
+      "t": "27.02.2026, 20:09:09",
+      "d": "Кабель: ks:nmm557tkgt0x-s1 → tp-in1:nmm55cci1zix"
+    },
+    {
+      "t": "27.02.2026, 20:06:37",
+      "d": "Яч.2: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:37",
+      "d": "Яч.2: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:35",
+      "d": "Луч 1 (ПС-677): ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:35",
+      "d": "Луч 1 (ПС-677): ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:35",
+      "d": "Луч 1 (ПС-677): ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:11",
+      "d": "Луч 1 (ПС-677): ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:10",
+      "d": "Луч 1 (ПС-677): ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:08",
+      "d": "Луч 1 (ПС-677): ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:07",
+      "d": "Луч 1 (ПС-677): ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:06",
+      "d": "Луч 1 (ПС-677): ВКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:06:05",
+      "d": "Луч 1 (ПС-677): ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:05:57",
+      "d": "Кабель: cell:c4 → ks:nmm557tkgt0x-s1"
+    },
+    {
+      "t": "27.02.2026, 20:05:00",
+      "d": "Кабель: tp-out1:nmm555och0tz → tp-in1_1:nmm5570s122c"
+    },
+    {
+      "t": "27.02.2026, 20:04:19",
+      "d": "ТП 3403 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:04:19",
+      "d": "ТП 3403 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:04:18",
+      "d": "ТП 3402 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:04:18",
+      "d": "ТП 3402 out1: ОТКЛ"
+    },
+    {
+      "t": "27.02.2026, 20:04:14",
+      "d": "Кабель: ks:nmm55063nmbj-s3 → tp-in1:nmm551in2qp5"
+    },
+    {
+      "t": "27.02.2026, 20:04:10",
+      "d": "Кабель: ks:nmm55063nmbj-s2 → tp-in1:nmm5517111u9"
+    },
+    {
+      "t": "27.02.2026, 20:04:02",
+      "d": "Кабель: ks:nmm55063nmbj-s2 → tp-in1:nmm5517111u9"
+    },
+    {
+      "t": "27.02.2026, 20:03:51",
+      "d": "Кабель: ks:nmm5530tv6fj-s3 → tp-in1:nmm555och0tz"
+    },
+    {
+      "t": "27.02.2026, 20:03:26",
+      "d": "Кабель: ks:nmm5530tv6fj-s2 → tp-in1:nmm554shtl7e"
+    },
+    {
+      "t": "27.02.2026, 20:02:20",
+      "d": "Кабель: ks:nmm55063nmbj-s4 → ks:nmm5530tv6fj-s1"
+    },
+    {
+      "t": "27.02.2026, 20:01:25",
+      "d": "Кабель: ks:nmm55063nmbj-s3 → tp-in1:nmm551in2qp5"
+    },
+    {
+      "t": "27.02.2026, 20:01:23",
+      "d": "Кабель: ks:nmm55063nmbj-s2 → tp-in1:nmm5517111u9"
+    },
+    {
+      "t": "27.02.2026, 20:00:00",
+      "d": "Кабель: cell:c1 → ks:nmm55063nmbj-s1"
+    },
+    {
+      "t": "27.02.2026, 19:59:01",
+      "d": "Импорт схемы из файла"
+    }
+  ]
+}
