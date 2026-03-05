@@ -376,18 +376,18 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
   // ═══ CONNECTING ═══
   const onPortClick = ref => {
     if (!connecting) { setConnecting(ref); return; }
-    // connecting → ref: create link
-    if (ref.type === "panelIn") {
+    // Determine from (feeder/breaker output) and to (panel input)
+    let from = null, to = null;
+    if (ref.type === "panelIn" && (connecting.type === "feederOut" || connecting.type === "breakerOut")) {
+      from = connecting; to = ref;
+    } else if (connecting.type === "panelIn" && (ref.type === "feederOut" || ref.type === "breakerOut")) {
+      from = ref; to = connecting;
+    }
+    if (from && to) {
       const lk = {
         id: uid(),
-        from: {
-          panelId: connecting.panelId || null, breakerId: connecting.breakerId,
-          ...(connecting.sldElemId && { sldElemId: connecting.sldElemId, sldPortId: connecting.sldPortId }),
-        },
-        to: {
-          panelId: ref.panelId,
-          ...(ref.sldElemId && { sldElemId: ref.sldElemId, sldPortId: ref.sldPortId }),
-        },
+        from: { panelId: from.panelId || null, breakerId: from.breakerId },
+        to: { panelId: to.panelId },
         waypoints: []
       };
       setP04(prev => ({ ...prev, links04: [...prev.links04, lk] }));
@@ -692,14 +692,9 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
           </span>
         </div>
         <div style={{ display: "flex", gap: 4, alignItems: "center", flexWrap: "wrap" }}>
-          <SldPalette placingType={placingType} setPlacingType={setPlacingType} />
           {connecting && <span style={{ fontSize: 8, color: "#ff0", background: "#332800", padding: "1px 6px", borderRadius: 3, border: "1px solid #ff0" }}>
-            {connecting.sldPort ? "Выбери порт SLD..." : "Выбери вторую точку..."}
+            Выбери вторую точку...
             <button onClick={() => setConnecting(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
-          </span>}
-          {placingType && !sldEditor && <span style={{ fontSize: 8, color: WC, background: WC + "15", padding: "1px 6px", borderRadius: 3, border: `1px solid ${WC}40` }}>
-            Кликни на канвас для размещения «{SLD_SYMBOLS[placingType]?.label}»
-            <button onClick={() => setPlacingType(null)} style={{ background: "none", border: "none", color: OFF, cursor: "pointer", fontSize: 8, marginLeft: 4 }}>✕</button>
           </span>}
           <button onClick={addFeeder} style={{ padding: "1px 6px", borderRadius: 2, background: BUS + "10", border: `1px solid ${BUS}40`, color: BUS, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ Фидер</button>
           <button onClick={addPanel} style={{ padding: "1px 6px", borderRadius: 2, background: ON + "10", border: `1px solid ${ON}40`, color: ON, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ РЩ</button>
@@ -731,21 +726,7 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
               <path d="M30 0L0 0 0 30" fill="none" stroke="#162030" strokeWidth="0.3" />
             </pattern>
           </defs>
-          <rect width={CANVAS_W} height={CANVAS_H} fill="url(#g04)"
-            onClick={e => {
-              if (!placingType) return;
-              const sp = clientToSvg(e.clientX, e.clientY); if (!sp) return;
-              addSldElem(placingType, sp.x, sp.y);
-            }}
-            style={placingType ? { cursor: "crosshair" } : {}} />
-
-          {/* ═══ SLD CANVAS (main) ═══ */}
-          <SldCanvas sld={sld} energized={sldEnergized} feeders={feeders}
-            connecting={connecting} setConnecting={setConnecting}
-            onElemClick={id => { const el = sld.elements.find(e => e.id === id); if (el && SLD_SYMBOLS[el.type]?.switchable) toggleSldElem(id, null); }}
-            onElemDblClick={id => openSldElemEditor(id, null)}
-            onPortClick={(eId, pId) => onSldPortClick(eId, pId, null)}
-            onElemDragStart={(e, id) => startDrag(e, "sldElem", id)} />
+          <rect width={CANVAS_W} height={CANVAS_H} fill="url(#g04)" />
 
           {/* ═══ MINI TP SCHEMATIC ═══ */}
           {(() => {
@@ -954,28 +935,6 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
                   fill={hasSld ? WC : TD} fontSize={5} fontFamily={FN}>ОЛС</text>
               </g>
 
-              {/* Panel SLD on main canvas */}
-              {hasSld && (() => {
-                const pEnergized = computeSldEnergy(pnl.sld);
-                return <SldCanvas sld={pnl.sld} energized={pEnergized} feeders={feeders}
-                  connecting={connecting} setConnecting={setConnecting}
-                  offsetX={pnl.x} offsetY={pnl.y}
-                  onElemClick={id => { const el = pnl.sld.elements.find(ee => ee.id === id); if (el && SLD_SYMBOLS[el.type]?.switchable) toggleSldElem(id, pnl.id); }}
-                  onElemDblClick={id => openSldElemEditor(id, pnl.id)}
-                  onPortClick={(eId, pId) => {
-                    const el = pnl.sld.elements.find(ee => ee.id === eId);
-                    if (!el) return;
-                    const sym = SLD_SYMBOLS[el.type];
-                    const port = sym?.ports.find(pp => pp.id === pId);
-                    if (!port) return;
-                    if (port.dir === "u" || port.dir === "l") {
-                      onPortClick({ panelId: pnl.id, type: "panelIn", sldElemId: eId, sldPortId: pId });
-                    } else {
-                      onPortClick({ panelId: pnl.id, breakerId: eId, type: "breakerOut", sldElemId: eId, sldPortId: pId });
-                    }
-                  }}
-                  onElemDragStart={(e, id) => startDrag(e, "sldElem", id, { panelId: pnl.id })} />;
-              })()}
             </g>;
           })}
 
