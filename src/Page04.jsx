@@ -871,12 +871,6 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
             const hasSld = pnl.sld?.elements?.length > 0;
 
             return <g key={pnl.id} onMouseDown={e => startDrag(e, "panel", pnl.id)} style={{ cursor: drag?.type === "panel" ? "grabbing" : "grab" }}>
-              {/* Input port */}
-              <Port x={pnl.x + PW / 2} y={pnl.y} on={on} label=""
-                isActive={connecting?.type === "panelIn" && connecting.panelId === pnl.id}
-                onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onPortClick({ panelId: pnl.id, type: "panelIn" }); }}
-                cursor={connecting ? "crosshair" : "pointer"} />
-
               {/* Name label */}
               <text x={pnl.x + PW / 2} y={pnl.y - 14} textAnchor="middle" fill={on ? BUS : TD}
                 fontSize={9} fontWeight="bold" fontFamily={FN} style={{ cursor: "pointer" }}
@@ -916,16 +910,6 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
                 {pnl.inputBreaker?.name} {pnl.inputBreaker?.nominal}А · {pnl.inputCable?.brand || ""}
               </text>
 
-              {/* Output port */}
-              <Port x={pnl.x + PW / 2} y={pnl.y + CARD_H + 10} on={on} label=""
-                isActive={connecting?.panelId === pnl.id && connecting?.type === "breakerOut"}
-                onMouseDown={e => {
-                  e.stopPropagation(); e.preventDefault();
-                  const firstBrk = pnl.outBreakers[0];
-                  if (firstBrk) onPortClick({ panelId: pnl.id, breakerId: firstBrk.id, type: "breakerOut" });
-                }}
-                cursor={connecting ? "crosshair" : "pointer"} />
-
               {/* ОЛС button */}
               <g onClick={e => { e.stopPropagation(); setSldEditor({ panelId: pnl.id }); setPlacingType(null); setConnecting(null); }}
                 style={{ cursor: "pointer" }}>
@@ -935,6 +919,19 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
                   fill={hasSld ? WC : TD} fontSize={5} fontFamily={FN}>ОЛС</text>
               </g>
 
+              {/* Ports — rendered LAST so they are on top and clickable */}
+              <Port x={pnl.x + PW / 2} y={pnl.y} on={on} label=""
+                isActive={connecting?.type === "panelIn" && connecting.panelId === pnl.id}
+                onMouseDown={e => { e.stopPropagation(); e.preventDefault(); onPortClick({ panelId: pnl.id, type: "panelIn" }); }}
+                cursor={connecting ? "crosshair" : "pointer"} />
+              <Port x={pnl.x + PW / 2} y={pnl.y + CARD_H + 10} on={on} label=""
+                isActive={connecting?.panelId === pnl.id && connecting?.type === "breakerOut"}
+                onMouseDown={e => {
+                  e.stopPropagation(); e.preventDefault();
+                  const firstBrk = pnl.outBreakers[0];
+                  if (firstBrk) onPortClick({ panelId: pnl.id, breakerId: firstBrk.id, type: "breakerOut" });
+                }}
+                cursor={connecting ? "crosshair" : "pointer"} />
             </g>;
           })}
 
