@@ -1,5 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import Page04 from "./Page04";
+import MeterTree from "./MeterTree";
+import BuildingView from "./BuildingView";
 
 const uid = () => "n" + Date.now().toString(36) + Math.random().toString(36).slice(2, 5);
 const ON = "#00e676", OFF = "#ff1744", BUS = "#ffd600", BUSOFF = "#3a2800";
@@ -574,8 +576,8 @@ export default function App() {
   }, []);
   
   const onPanStart = useCallback(e => {
-    // Middle button or Ctrl+Left for panning
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    // Middle button, Right button, or Alt+Left for panning
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
       e.preventDefault();
       setPanning({ sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y });
     }
@@ -680,6 +682,16 @@ export default function App() {
     );
   };
 
+  // ═══ METER TREE PAGE ROUTING ═══
+  if (page?.type === "tree") {
+    return <MeterTree onBack={() => setPage(null)} />;
+  }
+
+  // ═══ BUILDING VIEW PAGE ROUTING ═══
+  if (page?.type === "building") {
+    return <BuildingView onBack={() => setPage(null)} />;
+  }
+
   // ═══ 0.4kV PAGE ROUTING ═══
   if (page?.type === "04") {
     const tpP = d.tps.find(t => t.id === page.tpId);
@@ -713,6 +725,8 @@ export default function App() {
           <button onClick={add2BKTP} style={{ padding: "1px 6px", borderRadius: 2, background: WC + "10", border: `1px solid ${WC}40`, color: WC, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ 2БКТП</button>
           <button onClick={addKR} style={{ padding: "1px 6px", borderRadius: 2, background: KR + "10", border: `1px solid ${KR}40`, color: KR, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ КРУН</button>
           <button onClick={addLR} style={{ padding: "1px 6px", borderRadius: 2, background: LRC + "10", border: `1px solid ${LRC}40`, color: LRC, fontFamily: FN, fontSize: 7, cursor: "pointer" }}>+ ЛР</button>
+          <button onClick={() => setPage({ type: "tree" })} style={{ padding: "1px 6px", borderRadius: 2, background: "#ffd600" + "10", border: `1px solid #ffd60040`, color: "#ffd600", fontFamily: FN, fontSize: 7, cursor: "pointer" }}>Дерево ПУ</button>
+          <button onClick={() => setPage({ type: "building" })} style={{ padding: "1px 6px", borderRadius: 2, background: "#ff910010", border: `1px solid #ff910040`, color: "#ff9100", fontFamily: FN, fontSize: 7, cursor: "pointer" }}>Здание Г-И</button>
           <button onClick={exportState} style={{ padding: "1px 5px", borderRadius: 2, background: "none", border: `1px solid ${WC}30`, color: WC, fontSize: 7, cursor: "pointer", fontFamily: FN }}>Экспорт</button>
           <button onClick={() => importRef.current?.click()} style={{ padding: "1px 5px", borderRadius: 2, background: "none", border: `1px solid ${WC}30`, color: WC, fontSize: 7, cursor: "pointer", fontFamily: FN }}>Импорт</button>
           <input ref={importRef} type="file" accept=".json" onChange={importState} style={{ display: "none" }} />
@@ -730,7 +744,7 @@ export default function App() {
       </div>
 
       {/* SVG Canvas with Pan & Zoom */}
-      <div ref={containerRef} onMouseDown={onPanStart} onClick={() => selLink && setSelLink(null)}
+      <div ref={containerRef} onMouseDown={onPanStart} onContextMenu={e => e.preventDefault()} onClick={() => selLink && setSelLink(null)}
         style={{ flex: 1, overflow: "hidden", background: `radial-gradient(ellipse at 50% 20%, #111a24 0%, ${DK} 70%)`, position: "relative", cursor: panning ? "grabbing" : "default" }}>
         
         {/* Zoom controls */}

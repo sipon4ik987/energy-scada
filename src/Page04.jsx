@@ -57,7 +57,7 @@ function SldEditorOverlay({
 
   // Pan
   const onPanStart = e => {
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
       e.preventDefault(); setEpan({ sx: e.clientX, sy: e.clientY, vx: ev.x, vy: ev.y });
     }
   };
@@ -130,7 +130,7 @@ function SldEditorOverlay({
       </div>
 
       {/* Canvas */}
-      <div ref={containerRef} onMouseDown={onPanStart}
+      <div ref={containerRef} onMouseDown={onPanStart} onContextMenu={e => e.preventDefault()}
         style={{ flex: 1, overflow: "hidden", background: `radial-gradient(ellipse at 50% 20%, #111a24 0%, ${DK} 70%)`, position: "relative", cursor: epan ? "grabbing" : "default" }}>
         <svg ref={svgRef} width={SLD_W} height={SLD_H} viewBox={`0 0 ${SLD_W} ${SLD_H}`}
           style={{ display: "block", transform: `translate(${ev.x}px, ${ev.y}px) scale(${ev.zoom})`, transformOrigin: "0 0" }}>
@@ -643,7 +643,7 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
     });
   }, []);
   const onPanStart = useCallback(e => {
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
+    if (e.button === 1 || e.button === 2 || (e.button === 0 && e.altKey)) {
       e.preventDefault(); setPanning({ sx: e.clientX, sy: e.clientY, vx: view.x, vy: view.y });
     }
   }, [view]);
@@ -704,7 +704,7 @@ export default function Page04({ tpId, d, setD, onBack, log, trState }) {
       </div>
 
       {/* Canvas */}
-      <div ref={containerRef} onMouseDown={onPanStart} onClick={() => selLink && setSelLink(null)}
+      <div ref={containerRef} onMouseDown={onPanStart} onContextMenu={e => e.preventDefault()} onClick={() => selLink && setSelLink(null)}
         style={{ flex: 1, overflow: "hidden", background: `radial-gradient(ellipse at 50% 20%, #111a24 0%, ${DK} 70%)`, position: "relative", cursor: panning ? "grabbing" : "default" }}>
 
         {/* Zoom controls */}
